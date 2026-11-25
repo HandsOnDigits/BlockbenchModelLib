@@ -5,8 +5,48 @@ plugins {
 allprojects {
     group = 'com.hod'
     version = '0.1.0'
+}
 
+subprojects {
     repositories {
         mavenCentral()
+    }
+}
+
+// Combined distributable JAR targets.
+def combinedJarTargets = [
+        core: [':core'],
+        minecraft: [':core', ':common'],
+        neoforge: [':core', ':common', ':neoforge']
+]
+
+def selectedTarget = providers.gradleProperty('target').getOrElse('neoforge')
+
+if (!combinedJarTargets.containsKey(selectedTarget)) {
+    throw new GradleException(
+            "Invalid target '${selectedTarget}'. Valid targets: ${combinedJarTargets.keySet().join(', ')}"
+    )
+}
+
+tasks.register('combinedJar', Jar) {
+    group = 'build'
+    description = "Builds the combined BlockbenchModelLib JAR for ${selectedTarget}."
+
+    archiveBaseName.set('blockbench-model-lib')
+    archiveVersion.set(project.version.toString())
+    archiveClassifier.set(selectedTarget)
+
+    destinationDirectory.set(layout.buildDirectory.dir('libs'))
+
+    def selectedModules = combinedJarTargets[selectedTarget].collect {
+        project(it)
+    }
+
+    dependsOn selectedModules.collect {
+        it.tasks.named('check')
+    }
+
+    selectedModules.each { module ->
+        from(module.sourceSets.main.output)
     }
 }
