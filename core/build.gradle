@@ -1,0 +1,51 @@
+plugins {
+    id 'java-library'
+    id 'maven-publish'
+}
+
+group = 'com.hod'
+version = '0.1.0'
+
+base {
+    archivesName = 'blockbench-model-core'
+}
+
+java {
+    toolchain {
+        languageVersion = JavaLanguageVersion.of(21)
+    }
+
+    withSourcesJar()
+    withJavadocJar()
+}
+
+dependencies {
+    implementation 'com.google.code.gson:gson:2.13.2'
+
+    testImplementation platform('org.junit:junit-bom:5.12.2')
+    testImplementation 'org.junit.jupiter:junit-jupiter'
+    testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
+}
+
+tasks.withType(JavaCompile).configureEach {
+    options.encoding = 'UTF-8'
+}
+
+tasks.withType(Test).configureEach {
+    useJUnitPlatform()
+}
+
+publishing {
+    publications {
+        register('mavenJava', MavenPublication) {
+            from components.java
+        }
+    }
+
+    repositories {
+        maven {
+            name = 'local'
+            url = layout.buildDirectory.dir('repo')
+        }
+    }
+}
