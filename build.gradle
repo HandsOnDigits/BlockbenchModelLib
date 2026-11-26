@@ -1,3 +1,4 @@
+
 plugins {
     id 'net.neoforged.moddev' version '2.0.148' apply false
 }
@@ -13,14 +14,24 @@ subprojects {
     }
 }
 
-// Combined distributable JAR targets.
+// Available standalone distributions.
 def combinedJarTargets = [
-        core: [':core'],
-        minecraft: [':core', ':common'],
-        neoforge: [':core', ':common', ':neoforge']
+        core: [
+                modules: [':core'],
+                modType: 'LIBRARY'
+        ],
+        minecraft: [
+                modules: [':core', ':common'],
+                modType: 'GAMELIBRARY'
+        ],
+        neoforge: [
+                modules: [':core', ':common', ':neoforge'],
+                modType: 'MOD'
+        ]
 ]
 
-def selectedTarget = providers.gradleProperty('target').getOrElse('neoforge')
+def selectedTarget = providers.gradleProperty('target')
+        .getOrElse('minecraft')
 
 if (!combinedJarTargets.containsKey(selectedTarget)) {
     throw new GradleException(
@@ -28,9 +39,11 @@ if (!combinedJarTargets.containsKey(selectedTarget)) {
     )
 }
 
+def targetConfig = combinedJarTargets[selectedTarget]
+
 tasks.register('combinedJar', Jar) {
     group = 'build'
-    description = "Builds the combined BlockbenchModelLib JAR for ${selectedTarget}."
+    description = "Builds the standalone BlockbenchModelLib ${selectedTarget} JAR."
 
     archiveBaseName.set('blockbench-model-lib')
     archiveVersion.set(project.version.toString())
@@ -38,15 +51,24 @@ tasks.register('combinedJar', Jar) {
 
     destinationDirectory.set(layout.buildDirectory.dir('libs'))
 
-    def selectedModules = combinedJarTargets[selectedTarget].collect {
+    manifest {
+        attributes([
+                'FMLModType': targetConfig.modType,
+                'Automatic-Module-Name': 'com.hod.blockbench.' + selectedTarget
+        ])
+    }
+
+    def selectedModules = targetConfig.modules.collect {
         project(it)
     }
 
     dependsOn selectedModules.collect {
-        it.tasks.named('check')
+        it.tasks.named('classes')
     }
 
     selectedModules.each { module ->
         from(module.sourceSets.main.output)
     }
+
+    duplicatesStrategy = DuplicatesStrategy.FAIL
 }
