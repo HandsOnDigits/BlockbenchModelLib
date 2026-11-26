@@ -40,7 +40,8 @@ tasks.withType(JavaCompile).configureEach {
 tasks.named('jar', Jar).configure {
     manifest {
         attributes([
-                'FMLModType': 'LIBRARY'
+                'FMLModType': 'LIBRARY',
+                'Automatic-Module-Name': 'com.hod.blockbench.common'
         ])
     }
 }
