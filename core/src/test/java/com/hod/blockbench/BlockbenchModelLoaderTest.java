@@ -1,130 +1,126 @@
 package com.hod.blockbench;
 
+import static org.junit.jupiter.api.Assertions.*;
+
 import com.hod.blockbench.loader.BlockbenchModelLoader;
 import com.hod.blockbench.model.BlockbenchModel;
-import com.hod.blockbench.model.ModelOutlinerNode;
 import com.hod.blockbench.model.ModelCube;
 import com.hod.blockbench.model.ModelFace;
+import com.hod.blockbench.model.ModelOutlinerNode;
+import com.hod.blockbench.model.ModelTexture;
 import com.hod.blockbench.model.ModelUvTransform;
 import com.hod.blockbench.validation.BlockbenchModelValidator;
 import com.hod.blockbench.validation.ValidationIssue;
 import com.hod.blockbench.validation.ValidationSeverity;
-import com.hod.blockbench.model.ModelTexture;
-
-import org.junit.jupiter.api.Test;
-import static org.junit.jupiter.api.Assertions.*;
-
-import java.io.InputStream;
 import java.io.ByteArrayInputStream;
+import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
-import java.util.HashSet;
-import java.util.Set;
-import java.util.List;
 import java.util.ArrayList;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Set;
+import org.junit.jupiter.api.Test;
 
 class BlockbenchModelLoaderTest {
-    @Test
-    void nestedOutlinerGroupsPreserveHierarchyAndCubeReferences()
-            throws Exception {
 
+    @Test
+    void nestedOutlinerGroupsPreserveHierarchyAndCubeReferences() throws Exception {
         String json = """
+        {
+          "name": "Nested Group Test",
+          "meta": {
+            "format_version": "4.10",
+            "model_format": "free",
+            "box_uv": false
+          },
+          "resolution": {
+            "width": 16,
+            "height": 16
+          },
+          "elements": [
             {
-              "name": "Nested Group Test",
-              "meta": {
-                "format_version": "4.10",
-                "model_format": "free",
-                "box_uv": false
-              },
-              "resolution": {
-                "width": 16,
-                "height": 16
-              },
-              "elements": [
-                {
-                  "uuid": "cube-1",
-                  "name": "Cube 1"
-                },
-                {
-                  "uuid": "cube-2",
-                  "name": "Cube 2"
-                },
-                {
-                  "uuid": "cube-3",
-                  "name": "Cube 3"
-                },
-                {
-                  "uuid": "cube-4",
-                  "name": "Cube 4"
-                }
-              ],
-              "textures": [],
-              "groups": [
-                {
-                  "uuid": "root",
-                  "name": "Root",
-                  "visibility": true,
-                  "export": true,
-                  "locked": false,
-                  "color": 0,
-                  "isOpen": true,
-                  "shade": true,
-                  "mirror_uv": false,
-                  "autouv": 0,
-                  "children": [
-                    "middle",
-                    "cube-4"
-                  ]
-                },
-                {
-                  "uuid": "middle",
-                  "name": "Middle",
-                  "visibility": true,
-                  "export": true,
-                  "locked": false,
-                  "color": 1,
-                  "isOpen": true,
-                  "shade": true,
-                  "mirror_uv": false,
-                  "autouv": 0,
-                  "children": [
-                    "inner",
-                    "cube-3"
-                  ]
-                },
-                {
-                  "uuid": "inner",
-                  "name": "Inner",
-                  "visibility": true,
-                  "export": true,
-                  "locked": false,
-                  "color": 2,
-                  "isOpen": true,
-                  "shade": true,
-                  "mirror_uv": false,
-                  "autouv": 0,
-                  "children": [
-                    "cube-1",
-                    "cube-2"
-                  ]
-                }
-              ],
-              "outliner": [
-                {
-                  "uuid": "root",
-                  "isOpen": true,
-                  "children": [
-                    "middle",
-                    "cube-4"
-                  ]
-                }
+              "uuid": "cube-1",
+              "name": "Cube 1"
+            },
+            {
+              "uuid": "cube-2",
+              "name": "Cube 2"
+            },
+            {
+              "uuid": "cube-3",
+              "name": "Cube 3"
+            },
+            {
+              "uuid": "cube-4",
+              "name": "Cube 4"
+            }
+          ],
+          "textures": [],
+          "groups": [
+            {
+              "uuid": "root",
+              "name": "Root",
+              "visibility": true,
+              "export": true,
+              "locked": false,
+              "color": 0,
+              "isOpen": true,
+              "shade": true,
+              "mirror_uv": false,
+              "autouv": 0,
+              "children": [
+                "middle",
+                "cube-4"
+              ]
+            },
+            {
+              "uuid": "middle",
+              "name": "Middle",
+              "visibility": true,
+              "export": true,
+              "locked": false,
+              "color": 1,
+              "isOpen": true,
+              "shade": true,
+              "mirror_uv": false,
+              "autouv": 0,
+              "children": [
+                "inner",
+                "cube-3"
+              ]
+            },
+            {
+              "uuid": "inner",
+              "name": "Inner",
+              "visibility": true,
+              "export": true,
+              "locked": false,
+              "color": 2,
+              "isOpen": true,
+              "shade": true,
+              "mirror_uv": false,
+              "autouv": 0,
+              "children": [
+                "cube-1",
+                "cube-2"
               ]
             }
-            """;
+          ],
+          "outliner": [
+            {
+              "uuid": "root",
+              "isOpen": true,
+              "children": [
+                "middle",
+                "cube-4"
+              ]
+            }
+          ]
+        }
+        """;
 
         BlockbenchModel model = BlockbenchModelLoader.load(
-                new ByteArrayInputStream(
-                        json.getBytes(StandardCharsets.UTF_8)
-                )
+            new ByteArrayInputStream(json.getBytes(StandardCharsets.UTF_8))
         );
 
         assertEquals(1, model.outliner().size());
@@ -175,25 +171,25 @@ class BlockbenchModelLoaderTest {
     @Test
     void normalizationUsesPerTextureUvDimensions() {
         ModelTexture texture = new ModelTexture(
-                "texture-2",
-                "high-resolution",
-                128,
-                128,
-                64,
-                64,
-                1,
-                "custom",
-                "",
-                false,
-                "",
-                null
+            "texture-2",
+            "high-resolution",
+            128,
+            128,
+            64,
+            64,
+            1,
+            "custom",
+            "",
+            false,
+            "",
+            null
         );
 
         ModelFace face = new ModelFace(
-                ModelFace.Direction.NORTH,
-                new ModelFace.ModelUv(0, 0, 32, 32),
-                0,
-                0
+            ModelFace.Direction.NORTH,
+            new ModelFace.ModelUv(0, 0, 32, 32),
+            0,
+            0
         );
 
         var normalized = face.normalizedUv(texture);
@@ -207,25 +203,25 @@ class BlockbenchModelLoaderTest {
     @Test
     void reversedUvBoundsArePreserved() {
         ModelTexture texture = new ModelTexture(
-                "texture-1",
-                "test",
-                64,
-                64,
-                64,
-                64,
-                1,
-                "custom",
-                "",
-                false,
-                "",
-                null
+            "texture-1",
+            "test",
+            64,
+            64,
+            64,
+            64,
+            1,
+            "custom",
+            "",
+            false,
+            "",
+            null
         );
 
         ModelFace face = new ModelFace(
-                ModelFace.Direction.UP,
-                new ModelFace.ModelUv(19, 37, 18, 18),
-                0,
-                0
+            ModelFace.Direction.UP,
+            new ModelFace.ModelUv(19, 37, 18, 18),
+            0,
+            0
         );
 
         var normalized = face.normalizedUv(texture);
@@ -255,6 +251,7 @@ class BlockbenchModelLoaderTest {
             {
               "name": "textile_machine.png",
               "path": "",
+              "relative_path": "../textures/block/textile_machine.png",
               "folder": "block",
               "namespace": "havahstextile",
               "id": "0",
@@ -276,9 +273,7 @@ class BlockbenchModelLoaderTest {
         """;
 
         BlockbenchModel model = BlockbenchModelLoader.load(
-                new ByteArrayInputStream(
-                        json.getBytes(StandardCharsets.UTF_8)
-                )
+            new ByteArrayInputStream(json.getBytes(StandardCharsets.UTF_8))
         );
 
         assertEquals(1, model.textures().size());
@@ -286,7 +281,7 @@ class BlockbenchModelLoaderTest {
         ModelTexture texture = model.textures().getFirst();
 
         assertEquals("textile_machine.png", texture.name());
-        assertEquals("", texture.path());
+        assertEquals("block/textile_machine.png", texture.path());
         assertEquals("block", texture.folder());
         assertEquals("havahstextile", texture.namespace());
         assertTrue(texture.internal());
