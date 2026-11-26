@@ -6,16 +6,14 @@ import com.hod.blockbench.common.geometry.ModelVertex;
 import com.hod.blockbench.common.render.texture.ModelTextureRegistration;
 import com.mojang.blaze3d.vertex.PoseStack;
 import com.mojang.blaze3d.vertex.VertexConsumer;
-
-import net.minecraft.client.renderer.MultiBufferSource;
-import net.minecraft.client.renderer.RenderType;
-import net.minecraft.resources.ResourceLocation;
-
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Objects;
 import java.util.function.BiFunction;
 import java.util.function.IntFunction;
+import net.minecraft.client.renderer.MultiBufferSource;
+import net.minecraft.client.renderer.RenderType;
+import net.minecraft.resources.ResourceLocation;
 
 public final class BlockbenchModelRenderer {
 
@@ -24,31 +22,57 @@ public final class BlockbenchModelRenderer {
      */
     public static final float BLOCKBENCH_UNITS_PER_BLOCK = 16.0f;
 
-    private BlockbenchModelRenderer() {
-    }
+    private BlockbenchModelRenderer() {}
 
     /**
      * Renders geometry using automatically selected Minecraft render buffers.
      *
-     * Uses entityCutoutNoCull for all textures.
+     * Backface culling is enabled by default.
      */
     public static void render(
-            ModelGeometry geometry,
-            PoseStack poseStack,
-            ModelTextureRegistration textures,
-            MultiBufferSource buffers,
-            int packedLight,
-            int packedOverlay
+        ModelGeometry geometry,
+        PoseStack poseStack,
+        ModelTextureRegistration textures,
+        MultiBufferSource buffers,
+        int packedLight,
+        int packedOverlay
     ) {
         render(
-                geometry,
-                poseStack,
-                textures,
-                buffers,
-                (index, location) ->
-                        RenderType.entityCutoutNoCull(location),
-                packedLight,
-                packedOverlay
+            geometry,
+            poseStack,
+            textures,
+            buffers,
+            false,
+            packedLight,
+            packedOverlay
+        );
+    }
+
+    /**
+     * Renders geometry with configurable double-sided rendering.
+     *
+     * @param doubleSided true to disable backface culling
+     */
+    public static void render(
+        ModelGeometry geometry,
+        PoseStack poseStack,
+        ModelTextureRegistration textures,
+        MultiBufferSource buffers,
+        boolean doubleSided,
+        int packedLight,
+        int packedOverlay
+    ) {
+        render(
+            geometry,
+            poseStack,
+            textures,
+            buffers,
+            (index, location) ->
+                doubleSided
+                    ? RenderType.entityCutoutNoCull(location)
+                    : RenderType.entityCutout(location),
+            packedLight,
+            packedOverlay
         );
     }
 
@@ -59,19 +83,22 @@ public final class BlockbenchModelRenderer {
      * its registered ResourceLocation.
      */
     public static void render(
-            ModelGeometry geometry,
-            PoseStack poseStack,
-            ModelTextureRegistration textures,
-            MultiBufferSource buffers,
-            BiFunction<Integer, ResourceLocation, RenderType> renderTypes,
-            int packedLight,
-            int packedOverlay
+        ModelGeometry geometry,
+        PoseStack poseStack,
+        ModelTextureRegistration textures,
+        MultiBufferSource buffers,
+        BiFunction<Integer, ResourceLocation, RenderType> renderTypes,
+        int packedLight,
+        int packedOverlay
     ) {
         Objects.requireNonNull(geometry, "Geometry cannot be null.");
         Objects.requireNonNull(poseStack, "PoseStack cannot be null.");
         Objects.requireNonNull(textures, "Textures cannot be null.");
         Objects.requireNonNull(buffers, "Buffer source cannot be null.");
-        Objects.requireNonNull(renderTypes, "Render type factory cannot be null.");
+        Objects.requireNonNull(
+            renderTypes,
+            "Render type factory cannot be null."
+        );
 
         Map<Integer, VertexConsumer> consumers = new HashMap<>();
 
@@ -79,26 +106,25 @@ public final class BlockbenchModelRenderer {
             int textureIndex = quad.texture();
 
             VertexConsumer consumer = consumers.computeIfAbsent(
-                    textureIndex,
-                    index -> {
-                        ResourceLocation location = textures.require(index);
+                textureIndex,
+                index -> {
+                    ResourceLocation location = textures.require(index);
 
-                        RenderType renderType = Objects.requireNonNull(
-                                renderTypes.apply(index, location),
-                                "RenderType factory returned null for texture "
-                                        + index
-                        );
+                    RenderType renderType = Objects.requireNonNull(
+                        renderTypes.apply(index, location),
+                        "RenderType factory returned null for texture " + index
+                    );
 
-                        return buffers.getBuffer(renderType);
-                    }
+                    return buffers.getBuffer(renderType);
+                }
             );
 
             renderQuad(
-                    quad,
-                    poseStack.last(),
-                    consumer,
-                    packedLight,
-                    packedOverlay
+                quad,
+                poseStack.last(),
+                consumer,
+                packedLight,
+                packedOverlay
             );
         }
     }
@@ -109,11 +135,11 @@ public final class BlockbenchModelRenderer {
      * The supplied PoseStack is not modified.
      */
     public static void render(
-            ModelGeometry geometry,
-            PoseStack poseStack,
-            IntFunction<VertexConsumer> consumers,
-            int packedLight,
-            int packedOverlay
+        ModelGeometry geometry,
+        PoseStack poseStack,
+        IntFunction<VertexConsumer> consumers,
+        int packedLight,
+        int packedOverlay
     ) {
         Objects.requireNonNull(geometry, "Geometry cannot be null.");
         Objects.requireNonNull(poseStack, "PoseStack cannot be null.");
@@ -123,18 +149,11 @@ public final class BlockbenchModelRenderer {
 
         for (ModelQuad quad : geometry.quads()) {
             VertexConsumer consumer = Objects.requireNonNull(
-                    consumers.apply(quad.texture()),
-                    "No VertexConsumer supplied for texture index "
-                            + quad.texture()
+                consumers.apply(quad.texture()),
+                "No VertexConsumer supplied for texture index " + quad.texture()
             );
 
-            renderQuad(
-                    quad,
-                    pose,
-                    consumer,
-                    packedLight,
-                    packedOverlay
-            );
+            renderQuad(quad, pose, consumer, packedLight, packedOverlay);
         }
     }
 
@@ -144,50 +163,46 @@ public final class BlockbenchModelRenderer {
      * Only use when all faces share the same render type and texture.
      */
     public static void render(
-            ModelGeometry geometry,
-            PoseStack poseStack,
-            VertexConsumer consumer,
-            int packedLight,
-            int packedOverlay
+        ModelGeometry geometry,
+        PoseStack poseStack,
+        VertexConsumer consumer,
+        int packedLight,
+        int packedOverlay
     ) {
         Objects.requireNonNull(consumer, "VertexConsumer cannot be null.");
 
         render(
-                geometry,
-                poseStack,
-                ignored -> consumer,
-                packedLight,
-                packedOverlay
+            geometry,
+            poseStack,
+            ignored -> consumer,
+            packedLight,
+            packedOverlay
         );
     }
 
     private static void renderQuad(
-            ModelQuad quad,
-            PoseStack.Pose pose,
-            VertexConsumer consumer,
-            int packedLight,
-            int packedOverlay
+        ModelQuad quad,
+        PoseStack.Pose pose,
+        VertexConsumer consumer,
+        int packedLight,
+        int packedOverlay
     ) {
         for (ModelVertex vertex : quad.vertices()) {
             var position = vertex.position();
             var normal = vertex.normal();
 
-            consumer.addVertex(
-                            pose,
-                            position.x() / BLOCKBENCH_UNITS_PER_BLOCK,
-                            position.y() / BLOCKBENCH_UNITS_PER_BLOCK,
-                            position.z() / BLOCKBENCH_UNITS_PER_BLOCK
-                    )
-                    .setColor(1.0f, 1.0f, 1.0f, 1.0f)
-                    .setUv(vertex.u(), vertex.v())
-                    .setOverlay(packedOverlay)
-                    .setLight(packedLight)
-                    .setNormal(
-                            pose,
-                            normal.x(),
-                            normal.y(),
-                            normal.z()
-                    );
+            consumer
+                .addVertex(
+                    pose,
+                    position.x() / BLOCKBENCH_UNITS_PER_BLOCK,
+                    position.y() / BLOCKBENCH_UNITS_PER_BLOCK,
+                    position.z() / BLOCKBENCH_UNITS_PER_BLOCK
+                )
+                .setColor(1.0f, 1.0f, 1.0f, 1.0f)
+                .setUv(vertex.u(), vertex.v())
+                .setOverlay(packedOverlay)
+                .setLight(packedLight)
+                .setNormal(pose, normal.x(), normal.y(), normal.z());
         }
     }
 }

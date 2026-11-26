@@ -6,16 +6,13 @@ import com.hod.blockbench.common.render.texture.MinecraftModelTextureResolver;
 import com.hod.blockbench.common.render.texture.ModelTextureManager;
 import com.hod.blockbench.common.render.texture.ModelTextureRegistration;
 import com.hod.blockbench.model.BlockbenchModel;
-
 import com.mojang.blaze3d.vertex.PoseStack;
-
-import net.minecraft.client.renderer.MultiBufferSource;
-import net.minecraft.resources.ResourceLocation;
-import net.minecraft.server.packs.resources.ResourceManager;
-
 import java.io.IOException;
 import java.util.Objects;
 import java.util.Optional;
+import net.minecraft.client.renderer.MultiBufferSource;
+import net.minecraft.resources.ResourceLocation;
+import net.minecraft.server.packs.resources.ResourceManager;
 
 /**
  * Runtime instance of a Blockbench model.
@@ -31,53 +28,55 @@ public final class BlockbenchModelInstance implements AutoCloseable {
     private final BlockbenchModel model;
     private final ModelGeometry geometry;
     private final ModelTextureRegistration textures;
+    private final boolean doubleSided;
 
     private boolean closed;
 
     private BlockbenchModelInstance(
-            BlockbenchModel model,
-            ModelGeometry geometry,
-            ModelTextureRegistration textures
+        BlockbenchModel model,
+        ModelGeometry geometry,
+        ModelTextureRegistration textures,
+        boolean doubleSided
     ) {
         this.model = Objects.requireNonNull(model);
         this.geometry = Objects.requireNonNull(geometry);
         this.textures = Objects.requireNonNull(textures);
+        this.doubleSided = doubleSided;
     }
 
-    /**
-     * Creates a runtime instance from an already loaded Blockbench model.
-     *
-     * @param model loaded Blockbench model
-     * @param textureManager manager used to register textures
-     * @param resourceManager Minecraft resource manager used to resolve external textures
-     * @return initialized model instance
-     * @throws IOException if a texture cannot be loaded
-     */
     public static BlockbenchModelInstance create(
-            BlockbenchModel model,
-            ModelTextureManager textureManager,
-            ResourceManager resourceManager
+        BlockbenchModel model,
+        ModelTextureManager textureManager,
+        ResourceManager resourceManager,
+        boolean doubleSided
     ) throws IOException {
         Objects.requireNonNull(model, "Model cannot be null.");
-        Objects.requireNonNull(textureManager, "Texture manager cannot be null.");
-        Objects.requireNonNull(resourceManager, "ResourceManager cannot be null.");
+        Objects.requireNonNull(
+            textureManager,
+            "Texture manager cannot be null."
+        );
+        Objects.requireNonNull(
+            resourceManager,
+            "ResourceManager cannot be null."
+        );
 
         ModelGeometry geometry = ModelGeometryBuilder.build(model);
 
         var resolvedTextures = MinecraftModelTextureResolver.resolve(
-                model.textures(),
-                resourceManager
+            model.textures(),
+            resourceManager
         );
 
         ModelTextureRegistration textures = textureManager.register(
-                resolvedTextures
+            resolvedTextures
         );
 
         try {
             return new BlockbenchModelInstance(
-                    model,
-                    geometry,
-                    textures
+                model,
+                geometry,
+                textures,
+                doubleSided
             );
         } catch (RuntimeException | Error exception) {
             try {
@@ -91,24 +90,46 @@ public final class BlockbenchModelInstance implements AutoCloseable {
     }
 
     /**
+     * Creates a runtime instance from an already loaded Blockbench model.
+     *
+     * @param model loaded Blockbench model
+     * @param textureManager manager used to register textures
+     * @param resourceManager Minecraft resource manager used to resolve external textures
+     * @return initialized model instance
+     * @throws IOException if a texture cannot be loaded
+     */
+    public static BlockbenchModelInstance create(
+        BlockbenchModel model,
+        ModelTextureManager textureManager,
+        ResourceManager resourceManager
+    ) throws IOException {
+        return create(model, textureManager, resourceManager, false);
+    }
+
+    /**
      * Renders this model instance.
      */
     public void render(
-            PoseStack poseStack,
-            MultiBufferSource buffers,
-            int packedLight,
-            int packedOverlay
+        PoseStack poseStack,
+        MultiBufferSource buffers,
+        int packedLight,
+        int packedOverlay
     ) {
         ensureOpen();
 
         BlockbenchModelRenderer.render(
-                geometry,
-                poseStack,
-                textures,
-                buffers,
-                packedLight,
-                packedOverlay
+            geometry,
+            poseStack,
+            textures,
+            buffers,
+            doubleSided,
+            packedLight,
+            packedOverlay
         );
+    }
+
+    public boolean isDoubleSided() {
+        return doubleSided;
     }
 
     public BlockbenchModel model() {
@@ -134,7 +155,7 @@ public final class BlockbenchModelInstance implements AutoCloseable {
     private void ensureOpen() {
         if (closed) {
             throw new IllegalStateException(
-                    "Cannot use a closed BlockbenchModelInstance."
+                "Cannot use a closed BlockbenchModelInstance."
             );
         }
     }
