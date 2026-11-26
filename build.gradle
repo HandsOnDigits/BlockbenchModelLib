@@ -54,7 +54,8 @@ tasks.register('combinedJar', Jar) {
     manifest {
         attributes([
                 'FMLModType': targetConfig.modType,
-                'Automatic-Module-Name': 'com.hod.blockbench.' + selectedTarget
+                'Automatic-Module-Name': 'com.hod.blockbench.' + selectedTarget,
+                'Implementation-Version': project.version.toString()
         ])
     }
 
