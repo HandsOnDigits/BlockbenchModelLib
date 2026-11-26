@@ -149,6 +149,7 @@ See [LICENSE](LICENSE) for licensing information.
 ---
 
 AI is used in some parts of the project development; changes are edited and tested by humans.
+
 All images and sounds are human-made.
 
 ---
