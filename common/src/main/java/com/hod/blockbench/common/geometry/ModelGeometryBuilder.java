@@ -333,10 +333,24 @@ public final class ModelGeometryBuilder {
             return;
         }
 
-        ModelTransform elementTransform = ModelTransform.aroundOrigin(
-            originOrZero(element.origin()),
-            rotationOrZero(element.rotation())
-        );
+        ModelVector3 origin = originOrZero(element.origin());
+        ModelVector3 rotation = rotationOrZero(element.rotation());
+
+        ModelTransform elementTransform;
+
+        if ("mesh".equalsIgnoreCase(element.originalType())) {
+            // Free-format mesh vertices are element-local.
+            // Rotate locally, then position the element at its origin.
+            elementTransform = ModelTransform.translation(
+                origin.x(),
+                origin.y(),
+                origin.z()
+            ).multiply(ModelTransform.rotation(rotation));
+        } else {
+            // Cube vertices are already in model coordinates.
+            // Rotate them around the element's pivot.
+            elementTransform = ModelTransform.aroundOrigin(origin, rotation);
+        }
 
         ModelTransform transform = parentTransform.multiply(elementTransform);
 
