@@ -1,7 +1,6 @@
-# BlockbenchModelLib
-## Mod Developer Guide
+# BlockbenchModelLib – Mod Developer Guide
 
-**Load, manage, and render Blockbench models in Minecraft mods.**
+**Complete guide to loading, managing, animating, and rendering Blockbench models in Minecraft mods.**
 
 | Requirement | Version |
 |---|---|
@@ -10,64 +9,91 @@
 | Java | 21 |
 | Model format | Blockbench Generic Model (`.bbmodel`) |
 
+> **Unofficial project:** BlockbenchModelLib is an independent project. It is not officially made by, affiliated with, endorsed by, or maintained by the Blockbench team. Blockbench and its associated trademarks belong to their respective owners.
+
 ---
 
 # 1. Introduction
 
-BlockbenchModelLib is a modular Java library that allows Minecraft mod developers to load and render models created with Blockbench.
+BlockbenchModelLib is a modular Java library designed to make it easier for Minecraft mod developers to use Blockbench models.
 
-The library provides a complete pipeline for converting Blockbench model files into Minecraft-renderable geometry, including texture resolution and registration.
+The library provides a reusable pipeline for:
 
-Rather than implementing custom model parsers, geometry builders, and texture management systems, mod developers can use BlockbenchModelLib to handle these operations.
+- Loading and parsing Blockbench models.
+- Generating Minecraft-compatible geometry.
+- Managing model textures.
+- Preserving model hierarchies and transformations.
+- Loading and evaluating Blockbench animations.
+- Controlling animation playback.
+- Rendering static and animated models.
 
-The main runtime API is `BlockbenchModelInstance`, which combines a parsed Blockbench model, generated geometry, and registered textures into a reusable rendering instance.
+Instead of implementing these systems individually, mod developers can use BlockbenchModelLib to integrate their models into Minecraft.
 
-### Features
+## 1.1 Main capabilities
 
-- Load Blockbench Generic Model (`.bbmodel`) files.
-- Parse model metadata, elements, and outliner structures.
-- Generate Minecraft-compatible geometry.
-- Preserve cube rotations and face-specific UV mappings.
-- Handle multiple textures.
-- Resolve embedded and external texture resources.
-- Inspect generated geometry and model bounds.
-- Render models using Minecraft's rendering infrastructure.
-- Support resource-pack-aware model loading.
+| Feature | Description |
+|---|---|
+| Model loading | Parse Blockbench `.bbmodel` files. |
+| Geometry | Generate Minecraft-compatible geometry. |
+| Textures | Resolve and register model textures. |
+| UV mapping | Preserve face-specific UV coordinates and rotations. |
+| Hierarchy | Preserve groups, pivots, and nested structures. |
+| Bounds | Calculate model dimensions and positioning information. |
+| Animation loading | Parse Blockbench animation definitions. |
+| Animation evaluation | Evaluate animated transformations at specific timestamps. |
+| Playback control | Play, pause, resume, stop, seek, and change playback speed. |
+| Hierarchical animation | Apply animated transformations to nested model groups. |
+| Rendering | Render static and animated model instances. |
 
 # 2. Architecture
 
-BlockbenchModelLib consists of three main modules.
+BlockbenchModelLib consists of three modules.
 
 | Module | Responsibility |
 |---|---|
-| `core` | Model data structures, parsing, and Minecraft-independent functionality. |
-| `common` | Geometry generation, texture management, and Minecraft rendering integration. |
+| `core` | Minecraft-independent model structures, parsing, and animation evaluation. |
+| `common` | Geometry generation, hierarchy, texture management, animation playback, and rendering. |
 | `neoforge` | NeoForge-specific integration. |
 
-### Main rendering pipeline
+## 2.1 Main model pipeline
 
 ```mermaid
 flowchart TD
     A["Blockbench .bbmodel"] --> B["BlockbenchModelLoader"]
     B --> C["BlockbenchModel"]
     C --> D["BlockbenchModelInstance.create()"]
-    D --> E["ModelGeometryBuilder"]
+    D --> E["ModelGeometry"]
     D --> F["ModelTextureManager"]
-    E --> G["ModelGeometry"]
-    F --> H["Texture Registration"]
-    G --> I["BlockbenchModelInstance"]
-    H --> I
-    I --> J["Minecraft Rendering"]
-    J --> K["PoseStack + MultiBufferSource"]
+    D --> G["AnimationController"]
+    E --> H["ModelBounds"]
+    E --> I["ModelGeometryHierarchy"]
+    F --> J["Texture Registration"]
+    G --> K["Animation Evaluation"]
+    I --> L["Hierarchical Rendering"]
+    K --> L
+    J --> L
+    L --> M["Minecraft Rendering"]
 ```
 
-Most mod developers only need to interact with the loader, model instance, texture manager, and bounds API.
+## 2.2 Recommended runtime API
 
-# 3. Adding BlockbenchModelLib
+Most mod developers should primarily use:
 
-BlockbenchModelLib is distributed as Gradle artifacts.
+```java
+BlockbenchModelLoader
+BlockbenchModelInstance
+ModelTextureManager
+ModelBounds
+ModelAnimation
+```
 
-For local development, the Maven repository is generated in:
+`BlockbenchModelInstance` is the main runtime integration point. It combines model geometry, texture management, hierarchy, and animation playback.
+
+# 3. Installation
+
+BlockbenchModelLib is built using Gradle and distributed through Maven artifacts.
+
+For local development, the generated Maven repository is located at:
 
 ```text
 BlockbenchModelLib/build/repo/
@@ -83,38 +109,25 @@ repositories {
 }
 ```
 
-Then add the appropriate library dependencies.
+Add the required library modules using their published Maven coordinates.
 
-The exact group, artifact, and version coordinates should match the published BlockbenchModelLib release.
+The exact group, artifact, and version coordinates depend on the release being used.
 
-For NeoForge projects, use the modules required by your integration rather than depending on internal source directories.
+For NeoForge integrations, include the appropriate modules rather than depending on internal source directories.
 
 # 4. Preparing Blockbench models
 
-BlockbenchModelLib currently targets the Generic Model format.
+BlockbenchModelLib currently targets Blockbench Generic Model files.
 
-### Supported model format
+## 4.1 Supported model format
 
 - Format: Generic Model
 - Model identifier: `free`
 - Extension: `.bbmodel`
 
-### Model preparation
+The current implementation supports cube-based geometry, face-specific UV coordinates, texture indices, rotations, inflation, and model hierarchy.
 
-For best results:
-
-1. Create your model in Blockbench.
-2. Select the Generic Model format.
-3. Create your geometry using cubes.
-4. Configure the textures and UV mappings.
-5. Organize elements into groups when appropriate.
-6. Save the model as a `.bbmodel` file.
-
-### Recommended resource structure
-
-Keep your models in your mod's resource directory.
-
-Example:
+## 4.2 Recommended resource structure
 
 ```text
 src/main/resources/
@@ -122,41 +135,13 @@ src/main/resources/
     └── mymod/
         ├── bbmodels/
         │   ├── machine.bbmodel
-        │   └── machine_part.bbmodel
+        │   └── spinning_wheel.bbmodel
         └── textures/
             └── models/
                 └── machine.png
 ```
 
-Models should be referenced using Minecraft resource locations.
-
-For example:
-
-```java
-ResourceLocation.fromNamespaceAndPath(
-    "mymod",
-    "bbmodels/machine.bbmodel"
-);
-```
-
-# 5. Loading a model
-
-The model loader is located in:
-
-```java
-com.hod.blockbench.loader.BlockbenchModelLoader
-```
-
-The loader provides several ways to load model files, including:
-
-- `Path`
-- `File`
-- `InputStream`
-- `Reader`
-
-### Loading from a resource stream
-
-For Minecraft mods, loading through the resource manager is recommended.
+Reference models using Minecraft resource locations:
 
 ```java
 ResourceLocation MODEL_LOCATION =
@@ -164,14 +149,58 @@ ResourceLocation MODEL_LOCATION =
         "mymod",
         "bbmodels/machine.bbmodel"
     );
+```
 
-Minecraft minecraft = Minecraft.getInstance();
+## 4.3 Preparing animations
 
+Animations should be created in Blockbench and saved inside the Generic Model file.
+
+The model can contain multiple named animations.
+
+An animation contains:
+
+- A name.
+- A UUID.
+- A duration.
+- A loop setting.
+- Animation snapping information.
+- One or more animators.
+- Keyframes.
+- Animation channels.
+- Interpolation information.
+- Animation data points.
+
+Animators target model groups using their UUIDs.
+
+**Important:** Keep group UUIDs stable when modifying animated models. The animation system uses these identifiers to associate animators with the correct hierarchy nodes.
+
+# 5. Loading models
+
+The model loader is located in:
+
+```java
+com.hod.blockbench.loader.BlockbenchModelLoader
+```
+
+It supports loading from:
+
+- `Path`
+- `File`
+- `InputStream`
+- `Reader`
+
+## 5.1 Loading from a Minecraft resource
+
+For Minecraft mods, loading through the resource manager is recommended.
+
+```java
 Resource resource = minecraft
     .getResourceManager()
     .getResource(MODEL_LOCATION)
     .orElseThrow(() ->
-        new IOException("Missing model: " + MODEL_LOCATION)
+        new IOException(
+            "Missing model: " + MODEL_LOCATION
+        )
     );
 
 BlockbenchModel model;
@@ -181,25 +210,33 @@ try (InputStream input = resource.open()) {
 }
 ```
 
-The resource manager allows Minecraft resource-pack overrides to participate in resource resolution.
+This allows Minecraft resource-pack overrides to participate in resource resolution.
 
-**Important:** When supplying an `InputStream` or `Reader` directly, the caller is responsible for closing it. The loader does not take ownership of supplied streams.
+## 5.2 Resource loader
 
-For loading Minecraft resources, the library also provides `BlockbenchResourceLoader`.
+The library also provides `BlockbenchResourceLoader` for loading through Minecraft's resource manager.
+
+```java
+BlockbenchModel model =
+    BlockbenchResourceLoader.load(
+        minecraft.getResourceManager(),
+        MODEL_LOCATION
+    );
+```
+
+Use the resource loader when you want the library to handle resource stream management.
 
 # 6. Creating a model instance
 
 Once a model has been loaded, create a `BlockbenchModelInstance`.
 
-This is the recommended runtime representation for rendering.
-
 ```java
-Minecraft minecraft = Minecraft.getInstance();
-
 BlockbenchModelInstance instance =
     BlockbenchModelInstance.create(
         model,
-        new ModelTextureManager(minecraft.getTextureManager()),
+        new ModelTextureManager(
+            minecraft.getTextureManager()
+        ),
         minecraft.getResourceManager(),
         false
     );
@@ -212,47 +249,43 @@ The parameters are:
 | `model` | Parsed `BlockbenchModel`. |
 | `ModelTextureManager` | Manages Minecraft texture registration. |
 | `ResourceManager` | Provides access to Minecraft resources. |
-| `false` | Configuration flag for the instance creation operation. |
+| `false` | Instance creation configuration flag. |
 
-The instance handles geometry generation and texture registration.
+The instance creates the generated geometry, texture registrations, and animation runtime.
 
-You do not need to manually build geometry or register individual textures when using this API.
-
-### What does the instance contain?
-
-A `BlockbenchModelInstance` exposes:
+## 6.1 Accessing instance data
 
 ```java
 instance.model();
 instance.geometry();
+instance.hierarchy();
+instance.animationState();
 instance.isClosed();
 ```
 
-- `model()` returns the original parsed model.
-- `geometry()` returns generated `ModelGeometry`.
-- `isClosed()` indicates whether the instance has been closed.
+These methods provide access to the parsed model, generated geometry, model hierarchy, playback state, and instance lifecycle information.
 
-### Closing an instance
+## 6.2 Closing an instance
 
-Instances own their texture registrations and must be closed when they are no longer needed.
+When an instance is no longer needed:
 
 ```java
 instance.close();
 ```
 
-Closing an instance releases its associated texture registrations.
+Closing the instance releases its associated texture registrations.
 
-The `ModelTextureManager` itself remains caller-owned.
+The texture manager itself remains caller-owned.
 
-Do not close an instance while it is still being used for rendering.
+Never render or update a closed instance.
 
-# 7. Understanding model geometry and bounds
+# 7. Geometry and model bounds
 
-BlockbenchModelLib provides geometry information through `ModelGeometry`.
+Generated geometry is represented by `ModelGeometry`.
 
-One particularly useful feature is `ModelBounds`.
+The geometry contains information about the generated model and provides access to its bounds and hierarchy.
 
-Bounds describe the actual dimensions of generated model geometry.
+## 7.1 Accessing model bounds
 
 ```java
 ModelBounds bounds = instance
@@ -265,7 +298,7 @@ ModelBounds bounds = instance
     );
 ```
 
-### Accessing the bounds
+Access the bounds:
 
 ```java
 ModelVector3 min = bounds.min();
@@ -273,29 +306,29 @@ ModelVector3 max = bounds.max();
 ModelVector3 center = bounds.center();
 ```
 
-These values represent:
-
 | Value | Description |
 |---|---|
 | `min()` | Minimum X, Y, and Z coordinates. |
 | `max()` | Maximum X, Y, and Z coordinates. |
 | `center()` | Center of the geometry bounds. |
 
-You can use these values to calculate model positioning without relying on hardcoded translation offsets.
-
-### Understanding Blockbench units
+## 7.2 Blockbench coordinate conversion
 
 Blockbench uses 16 model units per Minecraft block.
 
 ```java
-private static final float BLOCKBENCH_UNITS_PER_BLOCK = 16.0F;
+private static final float BLOCKBENCH_UNITS_PER_BLOCK =
+    16.0F;
 ```
 
-When translating model geometry in Minecraft, convert Blockbench coordinates into Minecraft block coordinates.
+When positioning models, convert Blockbench coordinates into Minecraft coordinates.
 
-For example:
+For example, to horizontally center a model and align its bottom with the origin:
 
 ```java
+ModelVector3 min = bounds.min();
+ModelVector3 center = bounds.center();
+
 poseStack.translate(
     -center.x() / BLOCKBENCH_UNITS_PER_BLOCK,
     -min.y() / BLOCKBENCH_UNITS_PER_BLOCK,
@@ -303,13 +336,266 @@ poseStack.translate(
 );
 ```
 
-This centers the model horizontally and positions its lowest geometry point at the origin.
+This calculation works with different model dimensions and origins without manually estimating translation offsets.
 
-This approach is preferable to manually estimating offsets.
+# 8. Animation system
 
-# 8. Rendering a model
+BlockbenchModelLib includes an animation system that reads animation definitions directly from Blockbench Generic Model files.
 
-A model instance can be rendered directly:
+The animation system is divided into three main responsibilities:
+
+1. Animation data and parsing.
+2. Animation evaluation and playback.
+3. Hierarchical rendering.
+
+## 8.1 Animation architecture
+
+```mermaid
+flowchart TD
+    A["Blockbench Animation Data"] --> B["BlockbenchModelLoader"]
+    B --> C["ModelAnimation"]
+    C --> D["ModelAnimator"]
+    D --> E["AnimationKeyframe"]
+    E --> F["AnimationDataPoint"]
+    C --> G["AnimationController"]
+    G --> H["AnimationEvaluator"]
+    H --> I["AnimationState"]
+    I --> J["ModelGeometryHierarchy"]
+    J --> K["Animated Rendering"]
+```
+
+## 8.2 Animation data structures
+
+The animation system uses the following main classes.
+
+| Class | Module/package | Responsibility |
+|---|---|---|
+| `ModelAnimation` | `com.hod.blockbench.model` | Represents an animation. |
+| `ModelAnimator` | `com.hod.blockbench.model` | Represents an animated model group. |
+| `AnimationKeyframe` | `com.hod.blockbench.model` | Represents an animation keyframe. |
+| `AnimationDataPoint` | `com.hod.blockbench.model` | Stores keyframe transformation data. |
+| `AnimationController` | `com.hod.blockbench.animation` | Controls playback. |
+| `AnimationEvaluator` | `com.hod.blockbench.animation` | Evaluates animation transformations. |
+| `AnimationState` | `com.hod.blockbench.animation` | Stores current playback information. |
+| `AnimationPlaybackStatus` | `com.hod.blockbench.animation` | Represents playback status. |
+
+## 8.3 Supported animation channels
+
+The current animation evaluator supports:
+
+| Channel | Description |
+|---|---|
+| `position` | Animates group position. |
+| `rotation` | Animates group rotation. |
+| `scale` | Animates group scale. |
+
+Animation targets are associated with model hierarchy nodes using their UUIDs.
+
+## 8.4 Interpolation
+
+The current evaluator supports:
+
+- **Linear:** Interpolates between adjacent keyframes.
+- **Step:** Holds the previous keyframe value until the next keyframe.
+
+Unsupported interpolation modes should not be assumed to behave identically to their Blockbench counterparts.
+
+## 8.5 Loop modes
+
+The current playback system supports:
+
+- **Loop:** Restarts the animation after its duration.
+- **Once:** Plays the animation once and stops at its end.
+
+The loop setting is read from the Blockbench animation definition.
+
+# 9. Animation playback
+
+Animation playback is controlled through `BlockbenchModelInstance`.
+
+This is the recommended API for mod developers.
+
+## 9.1 Playing an animation by name
+
+```java
+instance.playAnimationByName("Spin");
+```
+
+This is useful when the animation name is known in advance.
+
+## 9.2 Playing an animation by UUID
+
+```java
+instance.playAnimation(animationUuid);
+```
+
+Use this when you want to identify an animation independently of its display name.
+
+## 9.3 Playing a ModelAnimation
+
+```java
+instance.playAnimation(animation);
+```
+
+This allows you to select an already retrieved `ModelAnimation` directly.
+
+## 9.4 Pausing playback
+
+```java
+instance.pauseAnimation();
+```
+
+Pausing stops animation time from advancing while preserving the current playback position.
+
+## 9.5 Resuming playback
+
+```java
+instance.resumeAnimation();
+```
+
+Resume continues from the paused position.
+
+## 9.6 Stopping playback
+
+```java
+instance.stopAnimation();
+```
+
+Stopping resets the active playback state.
+
+## 9.7 Changing animation speed
+
+```java
+instance.setAnimationSpeed(2.0F);
+```
+
+Examples:
+
+| Speed | Effect |
+|---|---|
+| `0.5F` | Half speed. |
+| `1.0F` | Normal speed. |
+| `2.0F` | Double speed. |
+
+A negative speed or other unsupported playback behavior should not be assumed to be available.
+
+## 9.8 Seeking
+
+The animation controller supports seeking to a specified playback position.
+
+The controller API is available through:
+
+```java
+AnimationController
+```
+
+Seeking is useful for synchronizing an animation with other game systems or positioning an animation at a specific timestamp.
+
+# 10. Updating animations
+
+Animations must be updated using elapsed time.
+
+The update method expects seconds, not ticks or milliseconds.
+
+```java
+instance.updateAnimation(deltaSeconds);
+```
+
+For example:
+
+```java
+float deltaSeconds = 1.0F / 20.0F;
+
+instance.updateAnimation(deltaSeconds);
+```
+
+This represents a 20 TPS update interval.
+
+**Important:** Call `updateAnimation()` once per update cycle, not once per render call.
+
+Minecraft may render the same object multiple times during a frame, especially for items and GUI contexts. Updating playback from the rendering method can therefore cause animations to run faster than intended.
+
+## 10.1 Example update method
+
+A mod can expose a small helper:
+
+```java
+public void tick(float deltaSeconds) {
+    if (modelInstance == null ||
+        modelInstance.isClosed()) {
+        return;
+    }
+
+    modelInstance.updateAnimation(deltaSeconds);
+}
+```
+
+Call this from the appropriate client-side tick or update system.
+
+## 10.2 Reading playback state
+
+```java
+AnimationState state =
+    instance.animationState();
+```
+
+The animation state exposes playback information, while `AnimationPlaybackStatus` represents the playback status.
+
+Use the state API when synchronizing animation playback with other mod systems.
+
+# 11. Hierarchical animation
+
+One of the important features of BlockbenchModelLib is hierarchical model animation.
+
+Blockbench groups can contain other groups and elements.
+
+For example:
+
+```text
+Frame
+└── Wheel
+    └── Roll
+```
+
+An animation targeting `Wheel` should affect the Wheel hierarchy node rather than treating the entire model as one flat collection of geometry.
+
+## 11.1 UUID-based hierarchy matching
+
+Animation targets are matched against hierarchy nodes using their UUIDs.
+
+This preserves the relationship between Blockbench animators and their corresponding model groups.
+
+## 11.2 Transformation composition
+
+Animated rendering combines the model's original transformations with animated transformations.
+
+The hierarchy handles:
+
+- Base position.
+- Animated position.
+- Base rotation.
+- Animated rotation.
+- Scale.
+- Group pivots.
+- Parent-child transformations.
+
+Rotation is applied relative to the relevant node pivot.
+
+Nested transformations are composed through the hierarchy, so parent transformations affect their children.
+
+## 11.3 Why hierarchy matters
+
+Consider a spinning wheel with a frame and a rotating wheel group.
+
+If the wheel is animated independently, the frame should remain stationary.
+
+With hierarchical animation, the library can apply the rotation to the wheel node while preserving the rest of the model.
+
+This avoids manually calculating individual vertex transformations in mod code.
+
+# 12. Rendering models
+
+A model instance can be rendered directly.
 
 ```java
 instance.render(
@@ -320,7 +606,7 @@ instance.render(
 );
 ```
 
-The parameters are:
+The rendering API accepts:
 
 | Parameter | Description |
 |---|---|
@@ -329,241 +615,169 @@ The parameters are:
 | `packedLight` | Packed lighting information. |
 | `packedOverlay` | Packed overlay information. |
 
-The model instance handles the geometry and texture rendering.
+The instance handles generated geometry and texture rendering.
 
-You should not recreate the geometry or register textures every time the render method is called.
+For animated models, the hierarchy-aware rendering path applies the evaluated animation transformations.
 
-# 9. Example: Custom item renderer
+# 13. Example: Animated item renderer
 
-One common use case is rendering a Blockbench model as an inventory item or held item.
+The following example demonstrates how to integrate an animated Blockbench model into a Minecraft item renderer.
 
-Minecraft provides `BlockEntityWithoutLevelRenderer` for this purpose.
+It uses the same model-loading and positioning approach as a regular item renderer.
 
-The following example demonstrates a complete item renderer.
+The animation is updated separately from rendering.
 
-### TextileMachineItemRenderer.java
+## 13.1 Loading the animated model
 
 ```java
-package com.example.mymod.client.render;
+private BlockbenchModelInstance modelInstance;
 
-import com.hod.blockbench.common.geometry.ModelBounds;
-import com.hod.blockbench.common.render.BlockbenchModelInstance;
-import com.hod.blockbench.common.render.texture.ModelTextureManager;
-import com.hod.blockbench.loader.BlockbenchModelLoader;
-import com.hod.blockbench.model.ModelVector3;
+private ModelBounds modelBounds;
 
-import com.mojang.blaze3d.vertex.PoseStack;
-import com.mojang.logging.LogUtils;
-
-import java.io.IOException;
-import java.io.InputStream;
-
-import net.minecraft.client.Minecraft;
-import net.minecraft.client.renderer.BlockEntityWithoutLevelRenderer;
-import net.minecraft.client.renderer.MultiBufferSource;
-import net.minecraft.resources.ResourceLocation;
-import net.minecraft.server.packs.resources.Resource;
-import net.minecraft.world.item.ItemDisplayContext;
-import net.minecraft.world.item.ItemStack;
-
-import org.slf4j.Logger;
-
-public final class MachineItemRenderer
-    extends BlockEntityWithoutLevelRenderer {
-
-    private static final Logger LOGGER =
-        LogUtils.getLogger();
-
-    private static final float BLOCKBENCH_UNITS_PER_BLOCK =
-        16.0F;
-
-    private static final ResourceLocation MODEL_LOCATION =
-        ResourceLocation.fromNamespaceAndPath(
-            "mymod",
-            "bbmodels/machine.bbmodel"
-        );
-
-    private BlockbenchModelInstance modelInstance;
-
-    private ModelBounds modelBounds;
-
-    public MachineItemRenderer() {
-        super(
-            Minecraft.getInstance()
-                .getBlockEntityRenderDispatcher(),
-            Minecraft.getInstance()
-                .getEntityModels()
-        );
+private BlockbenchModelInstance getModel() {
+    if (modelInstance != null) {
+        return modelInstance;
     }
 
-    private BlockbenchModelInstance getModel() {
-        if (modelInstance != null) {
-            return modelInstance;
-        }
+    Minecraft minecraft = Minecraft.getInstance();
 
-        Minecraft minecraft = Minecraft.getInstance();
+    try {
+        Resource resource = minecraft
+            .getResourceManager()
+            .getResource(MODEL_LOCATION)
+            .orElseThrow(() ->
+                new IOException(
+                    "Missing model: " + MODEL_LOCATION
+                )
+            );
 
-        try {
-            Resource resource = minecraft
-                .getResourceManager()
-                .getResource(MODEL_LOCATION)
+        try (InputStream input = resource.open()) {
+            var model = BlockbenchModelLoader.load(input);
+
+            BlockbenchModelInstance instance =
+                BlockbenchModelInstance.create(
+                    model,
+                    new ModelTextureManager(
+                        minecraft.getTextureManager()
+                    ),
+                    minecraft.getResourceManager(),
+                    false
+                );
+
+            ModelBounds bounds = instance
+                .geometry()
+                .bounds()
                 .orElseThrow(() ->
-                    new IOException(
-                        "Missing model: " + MODEL_LOCATION
+                    new IllegalStateException(
+                        "Model contains no geometry."
                     )
                 );
 
-            try (InputStream input = resource.open()) {
-                var model = BlockbenchModelLoader.load(input);
-
-                BlockbenchModelInstance instance =
-                    BlockbenchModelInstance.create(
-                        model,
-                        new ModelTextureManager(
-                            minecraft.getTextureManager()
-                        ),
-                        minecraft.getResourceManager(),
-                        false
-                    );
-
-                ModelBounds bounds = instance
-                    .geometry()
-                    .bounds()
-                    .orElseThrow(() ->
-                        new IllegalStateException(
-                            "Model contains no geometry."
-                        )
-                    );
-
-                modelBounds = bounds;
-                modelInstance = instance;
-            }
-
-            return modelInstance;
-
-        } catch (IOException | RuntimeException exception) {
-            LOGGER.error(
-                "Failed to load machine item model",
-                exception
-            );
-
-            return null;
-        }
-    }
-
-    @Override
-    public void renderByItem(
-        ItemStack stack,
-        ItemDisplayContext displayContext,
-        PoseStack poseStack,
-        MultiBufferSource bufferSource,
-        int packedLight,
-        int packedOverlay
-    ) {
-        BlockbenchModelInstance model = getModel();
-
-        if (model == null || modelBounds == null) {
-            return;
+            modelBounds = bounds;
+            modelInstance = instance;
         }
 
-        ModelVector3 min = modelBounds.min();
-        ModelVector3 center = modelBounds.center();
+        return modelInstance;
 
-        poseStack.pushPose();
+    } catch (IOException | RuntimeException exception) {
+        LOGGER.error(
+            "Failed to load animated model",
+            exception
+        );
 
-        try {
-            poseStack.translate(
-                -center.x() / BLOCKBENCH_UNITS_PER_BLOCK,
-                -min.y() / BLOCKBENCH_UNITS_PER_BLOCK,
-                -center.z() / BLOCKBENCH_UNITS_PER_BLOCK
-            );
-
-            model.render(
-                poseStack,
-                bufferSource,
-                packedLight,
-                packedOverlay
-            );
-
-        } finally {
-            poseStack.popPose();
-        }
+        return null;
     }
 }
 ```
 
-### How it works
+## 13.2 Starting an animation
 
-The renderer performs the following operations:
-
-1. Lazily loads the Blockbench model.
-2. Creates a `BlockbenchModelInstance`.
-3. Creates a `ModelTextureManager`.
-4. Generates the model geometry and registers its textures.
-5. Retrieves the generated geometry bounds.
-6. Calculates the positioning offset.
-7. Renders the model using Minecraft's rendering pipeline.
-
-### Why use model bounds?
-
-Different models can have different dimensions and origins.
-
-For example, one model might occupy coordinates from `-8` to `8`, while another occupies coordinates from `0` to `16`.
-
-Using `ModelBounds` makes the positioning calculation independent of those dimensions.
-
-The horizontal center is aligned with the origin, while the bottom of the model is aligned with the ground.
-
-This makes the renderer reusable across different models without manually adjusting offsets for each one.
-
-# 10. Registering the item renderer in NeoForge
-
-For NeoForge 1.21.1, item renderers can be registered using `RegisterClientExtensionsEvent`.
-
-Example:
+After the model has been loaded:
 
 ```java
-@SubscribeEvent
-public static void registerClientExtensions(
-    RegisterClientExtensionsEvent event
+BlockbenchModelInstance model = getModel();
+
+if (model != null) {
+    model.playAnimationByName("Spin");
+}
+```
+
+## 13.3 Updating animation playback
+
+Add a separate update method:
+
+```java
+public void tick(float deltaSeconds) {
+    BlockbenchModelInstance model = getModel();
+
+    if (model == null || model.isClosed()) {
+        return;
+    }
+
+    model.updateAnimation(deltaSeconds);
+}
+```
+
+Call this method from a client-side update or tick handler.
+
+For a continuously spinning item, make sure the animation's loop setting is configured in Blockbench.
+
+## 13.4 Rendering the animated model
+
+```java
+@Override
+public void renderByItem(
+    ItemStack stack,
+    ItemDisplayContext displayContext,
+    PoseStack poseStack,
+    MultiBufferSource bufferSource,
+    int packedLight,
+    int packedOverlay
 ) {
-    MachineItemRenderer renderer =
-        new MachineItemRenderer();
+    BlockbenchModelInstance model = getModel();
 
-    event.registerItem(
-        new IClientItemExtensions() {
+    if (model == null || modelBounds == null) {
+        return;
+    }
 
-            @Override
-            public BlockEntityWithoutLevelRenderer
-                getCustomRenderer() {
-                return renderer;
-            }
+    ModelVector3 min = modelBounds.min();
+    ModelVector3 center = modelBounds.center();
 
-        },
-        ModItems.MACHINE.get()
-    );
+    poseStack.pushPose();
+
+    try {
+        poseStack.translate(
+            -center.x() / 16.0F,
+            -min.y() / 16.0F,
+            -center.z() / 16.0F
+        );
+
+        model.render(
+            poseStack,
+            bufferSource,
+            packedLight,
+            packedOverlay
+        );
+
+    } finally {
+        poseStack.popPose();
+    }
 }
 ```
 
-Register the event handler on the appropriate mod event bus.
+The model instance handles the animated hierarchy during rendering.
 
-The item model JSON should use the built-in entity parent:
+No manual vertex animation is necessary in the item renderer.
 
-```json
-{
-  "parent": "minecraft:builtin/entity"
-}
-```
+**Note:** This example illustrates the playback and rendering integration. A production item renderer should also define when its animation starts, how it is updated, and how its instance is managed across resource reloads.
 
-This allows Minecraft to use the custom item renderer instead of the standard baked item model.
+# 14. Example: Block entity renderer
 
-# 11. Example: Block entity renderer
-
-BlockbenchModelLib can also be used for block entities.
+BlockbenchModelLib can also be used for animated block entities.
 
 The main difference is the rendering context and the transformations applied before rendering.
 
-A typical block entity renderer follows this structure:
+A typical renderer follows this structure:
 
 ```java
 public final class MachineBlockEntityRenderer
@@ -576,10 +790,9 @@ public final class MachineBlockEntityRenderer
     ) {
         Minecraft minecraft = Minecraft.getInstance();
 
-        // Load the model and create the instance here.
-        // Keep the instance instead of recreating it
-        // during every render call.
         this.model = loadModel(minecraft);
+
+        this.model.playAnimationByName("Spin");
     }
 
     @Override
@@ -594,7 +807,7 @@ public final class MachineBlockEntityRenderer
         poseStack.pushPose();
 
         try {
-            // Apply block-specific transformations here.
+            // Apply block-specific transformations.
 
             model.render(
                 poseStack,
@@ -610,28 +823,13 @@ public final class MachineBlockEntityRenderer
 }
 ```
 
-`loadModel()` above is an application-specific loading helper, not a BlockbenchModelLib API method.
+`loadModel()` is an application-specific helper, not a BlockbenchModelLib API method.
 
-Register the block entity renderer through NeoForge's `EntityRenderersEvent.RegisterRenderers`.
+The animation must also be updated through an appropriate client-side update system.
 
-### Positioning block entity models
+For block entities, consider whether playback should be synchronized with the block entity's game state. If multiple clients must observe the same animation phase, synchronize that state through your mod's networking or block entity data rather than relying on independent local playback clocks.
 
-For block models, the transformation depends on the model's coordinate system and desired placement.
-
-You can use `ModelBounds` to determine the model's dimensions and origin.
-
-For example, horizontal centering can be calculated using:
-
-```java
-ModelVector3 center = model.geometry()
-    .bounds()
-    .orElseThrow()
-    .center();
-```
-
-Then apply the appropriate translations and rotations before rendering.
-
-# 12. Texture management
+# 15. Texture management
 
 BlockbenchModelLib provides a texture management system.
 
@@ -645,7 +843,7 @@ Important classes include:
 | `ResolvedModelTexture` | Represents resolved texture data. |
 | `MinecraftModelTextureResolver` | Minecraft-specific texture resolution. |
 
-### Creating a texture manager
+## 15.1 Creating a texture manager
 
 ```java
 ModelTextureManager textureManager =
@@ -654,111 +852,100 @@ ModelTextureManager textureManager =
     );
 ```
 
-The manager is supplied when creating a model instance.
+Supply this manager when creating a model instance.
 
-### Multiple textures
+## 15.2 Multiple textures
 
 Blockbench models can contain multiple textures.
 
-BlockbenchModelLib maintains the relationship between model faces and their corresponding texture indices during geometry generation.
+The library preserves the relationship between faces and texture indices during geometry generation.
 
-Developers should not assume that a model contains only one texture.
+Do not assume that every model contains only one texture.
 
-### Texture lifecycle
+## 15.3 Texture lifecycle
 
-The model instance manages its own texture registrations.
+The model instance owns its texture registrations.
 
-When an instance is closed, its registrations are released.
+When the instance is closed, those registrations are released.
 
-The texture manager itself remains owned by the caller.
+The texture manager itself remains caller-owned.
 
-# 13. Resource loading and reloading
+# 16. Resource reloading and lifecycle
 
 Models should be loaded through Minecraft's resource manager whenever possible.
 
-This allows resource-pack overrides to be respected.
+This allows resource-pack overrides to participate in loading.
 
-For example:
+A model instance contains generated geometry and registered textures. When relevant resources change, cached instances may need to be rebuilt.
 
-```java
-ResourceLocation location =
-    ResourceLocation.fromNamespaceAndPath(
-        "mymod",
-        "bbmodels/machine.bbmodel"
-    );
-
-BlockbenchModel model =
-    BlockbenchResourceLoader.load(
-        minecraft.getResourceManager(),
-        location
-    );
-```
-
-The resource loader handles opening and closing the resource stream.
-
-### Resource reload considerations
-
-A model instance contains generated geometry and registered textures.
-
-When the resource environment changes, cached instances may need to be rebuilt.
-
-A mod developer should:
+A typical resource reload process should:
 
 1. Close the previous model instance.
-2. Load the model again through the current resource manager.
-3. Create a new instance.
+2. Load the model again.
+3. Create a new model instance.
 4. Recalculate model bounds.
-5. Replace the cached instance.
+5. Restore the desired animation state.
+6. Resume rendering with the new instance.
 
-Do not continue rendering a closed instance.
+Avoid retaining references to closed model instances.
 
-# 14. Performance recommendations
+# 17. Performance recommendations
 
-For frequently rendered models, follow these guidelines:
+For models that are rendered frequently:
 
 - Load models outside the rendering loop.
-- Create each model instance once per required rendering context.
-- Cache generated geometry.
+- Create model instances only when needed.
+- Reuse generated geometry.
 - Avoid repeatedly decoding embedded textures.
-- Avoid unnecessary texture registrations.
+- Avoid duplicate texture registrations.
 - Cache model bounds.
+- Update animations outside rendering callbacks.
 - Close instances when they are no longer needed.
 - Rebuild instances when relevant resources are reloaded.
 
-The `BlockbenchModelInstance` is designed to avoid repeating geometry generation and texture registration for every frame.
+For animated models, avoid unnecessarily updating animations that are not currently active.
 
-# 15. Troubleshooting
+# 18. Troubleshooting
 
 | Problem | Possible cause |
 |---|---|
-| Model cannot be loaded | Incorrect resource location or invalid `.bbmodel` file. |
-| Model does not render | Model instance failed to initialize or contains no geometry. |
+| Model cannot be loaded | Incorrect resource location or invalid `.bbmodel`. |
+| Model contains no geometry | Empty or unsupported model elements. |
 | Model is incorrectly positioned | Incorrect transformation or missing bounds calculation. |
-| Model is too large or small | Blockbench coordinate conversion is incorrect. |
+| Model is too large or small | Incorrect Blockbench coordinate conversion. |
 | Incorrect texture | Invalid texture index or UV mapping. |
 | Missing texture | Missing embedded image or unresolved external resource. |
-| Model disappears after reload | Cached instance was not recreated. |
-| Rendering fails after closing | Attempting to render a closed instance. |
+| Animation does not play | Incorrect animation name or UUID. |
+| Animation does not advance | `updateAnimation()` is not being called. |
+| Animation plays too quickly | Animation is updated more than once per tick. |
+| Wrong group is animated | Animator UUID does not match the hierarchy node. |
+| Parent and child transformations are incorrect | Incorrect hierarchy or pivot configuration. |
+| Animation stops after reload | Playback state was not restored on the new instance. |
+| Rendering fails after closing | Attempting to use a closed instance. |
 
-# 16. API reference
+# 19. API reference
 
-The following classes are particularly useful when integrating BlockbenchModelLib.
+The following classes are useful when integrating BlockbenchModelLib.
 
-### Loading
+## Model loading
 
 ```java
 com.hod.blockbench.loader.BlockbenchModelLoader
 com.hod.blockbench.loader.BlockbenchResourceLoader
 ```
 
-### Model data
+## Model data
 
 ```java
 com.hod.blockbench.model.BlockbenchModel
 com.hod.blockbench.model.ModelVector3
+com.hod.blockbench.model.ModelAnimation
+com.hod.blockbench.model.ModelAnimator
+com.hod.blockbench.model.AnimationKeyframe
+com.hod.blockbench.model.AnimationDataPoint
 ```
 
-### Geometry
+## Geometry
 
 ```java
 com.hod.blockbench.common.geometry.ModelGeometry
@@ -766,14 +953,23 @@ com.hod.blockbench.common.geometry.ModelBounds
 com.hod.blockbench.common.geometry.ModelGeometryBuilder
 ```
 
-### Rendering
+## Animation
+
+```java
+com.hod.blockbench.animation.AnimationController
+com.hod.blockbench.animation.AnimationEvaluator
+com.hod.blockbench.animation.AnimationState
+com.hod.blockbench.animation.AnimationPlaybackStatus
+```
+
+## Rendering
 
 ```java
 com.hod.blockbench.common.render.BlockbenchModelInstance
 com.hod.blockbench.common.render.BlockbenchModelRenderer
 ```
 
-### Textures
+## Textures
 
 ```java
 com.hod.blockbench.common.render.texture.ModelTextureManager
@@ -782,23 +978,45 @@ com.hod.blockbench.common.render.texture.ModelTextureResolver
 com.hod.blockbench.common.render.texture.ResolvedModelTexture
 ```
 
-# 17. Final notes
+# 20. Testing and verified functionality
 
-BlockbenchModelLib is intended to provide a reusable foundation for using Blockbench models in Minecraft mods.
+The animation system has been tested using a real Blockbench Generic Model containing a spinning wheel.
 
-Mod developers should generally follow this workflow:
+The integration tests verify:
 
-1. Load a `.bbmodel` using `BlockbenchModelLoader` or `BlockbenchResourceLoader`.
-2. Create a `BlockbenchModelInstance`.
-3. Retrieve geometry bounds if positioning calculations are required.
-4. Apply Minecraft transformations using `PoseStack`.
-5. Render through `BlockbenchModelInstance.render()`.
-6. Close and recreate instances when their resources are no longer valid.
+- Loading the actual `.bbmodel` file.
+- Parsing six animation targets.
+- Evaluating wheel and roll transformations at different timestamps.
+- Looping playback.
+- Pause and resume behavior.
+- Parent-child hierarchy relationships (`Frame → Wheel`).
 
-For most integrations, developers should use `BlockbenchModelInstance` rather than implementing the individual geometry and texture systems themselves.
+The common module's test suite passed with 24 tests, including seven spinning-wheel integration tests, at the time of the animation implementation.
+
+# 21. Contributing and support
+
+BlockbenchModelLib is an independent open-source project.
+
+Contributions, bug reports, and feature requests are welcome.
+
+When reporting an issue, include:
+
+- BlockbenchModelLib version.
+- Minecraft and NeoForge versions.
+- A minimal `.bbmodel` file when relevant.
+- Relevant logs or error messages.
+- Expected and actual behavior.
+
+# 22. Disclaimer
+
+BlockbenchModelLib is not an official Blockbench project.
+
+It is independently developed and maintained and is not affiliated with, endorsed by, or officially associated with the Blockbench team.
+
+Blockbench is a separate project. Its name and trademarks remain the property of their respective owners.
 
 ---
 
 **BlockbenchModelLib**
 
-*Bringing Blockbench models into Minecraft mods through a reusable rendering and model-loading library.*
+*Making Blockbench models, geometry, and animations easier to integrate into Minecraft mods.*
