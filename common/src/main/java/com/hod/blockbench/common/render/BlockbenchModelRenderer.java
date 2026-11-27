@@ -409,7 +409,6 @@ public final class BlockbenchModelRenderer {
     // ---------------------------------------------------------------------
     // Animation transforms
     // ---------------------------------------------------------------------
-
     private static void applyNodeTransform(
         ModelGeometryNode node,
         PoseStack poseStack,
@@ -434,18 +433,14 @@ public final class BlockbenchModelRenderer {
 
         float units = BLOCKBENCH_UNITS_PER_BLOCK;
 
-        poseStack.translate(
-            position.x() / units,
-            position.y() / units,
-            position.z() / units
-        );
-
+        // 1. Move to bone pivot in parent space + apply local bone translation
         poseStack.translate(
             origin.x() / units,
             origin.y() / units,
             origin.z() / units
         );
 
+        // 2. Apply bone rotation (local X -> Y -> Z via post-multiplication)
         poseStack.mulPose(
             Axis.ZP.rotationDegrees(baseRotation.z() + animatedRotation.z())
         );
@@ -456,8 +451,15 @@ public final class BlockbenchModelRenderer {
             Axis.XP.rotationDegrees(baseRotation.x() + animatedRotation.x())
         );
 
-        poseStack.scale(scale.x(), scale.y(), scale.z());
+        // 3. Apply bone position offset in the bone's rotated frame
+        poseStack.translate(
+            position.x() / units,
+            position.y() / units,
+            position.z() / units
+        );
 
+        // 4. Scale around pivot, then return from pivot
+        poseStack.scale(scale.x(), scale.y(), scale.z());
         poseStack.translate(
             -origin.x() / units,
             -origin.y() / units,
