@@ -12,6 +12,7 @@ import java.util.Base64;
 import java.util.EnumMap;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -66,6 +67,9 @@ final class BlockbenchModelParser {
 
         List<ModelCube> cubes = parseCubes(array(root, "elements"));
         List<ModelTexture> textures = parseTextures(array(root, "textures"));
+        List<ModelAnimation> animations = parseAnimations(
+            array(root, "animations")
+        );
 
         Set<String> cubeIds = new HashSet<>();
 
@@ -90,8 +94,163 @@ final class BlockbenchModelParser {
             cubes,
             outliner,
             textures,
+            animations,
             root.toString()
         );
+    }
+
+    private static List<ModelAnimation> parseAnimations(
+        JsonArray elements
+    ) throws BlockbenchModelException {
+        List<ModelAnimation> animations = new ArrayList<>();
+
+        Set<String> animationIds = new HashSet<>();
+
+        for (JsonElement element : elements) {
+            if (!element.isJsonObject()) {
+                continue;
+            }
+
+            JsonObject animation = element.getAsJsonObject();
+
+            String uuid = string(animation, "uuid", "");
+
+            if (uuid.isBlank()) {
+                throw new BlockbenchModelException(
+                    "An animation is missing its UUID."
+                );
+            }
+
+            if (!animationIds.add(uuid)) {
+                throw new BlockbenchModelException(
+                    "Duplicate animation UUID: " + uuid
+                );
+            }
+
+            animations.add(
+                new ModelAnimation(
+                    uuid,
+                    string(animation, "name", ""),
+                    string(animation, "loop", "once"),
+                    bool(animation, "override", false),
+                    decimal(animation, "length", 0),
+                    integer(animation, "snapping", 0),
+                    bool(animation, "selected", false),
+                    string(animation, "group_name", ""),
+                    integer(animation, "scope", 0),
+                    string(animation, "anim_time_update", ""),
+                    string(animation, "blend_weight", ""),
+                    string(animation, "start_delay", ""),
+                    string(animation, "loop_delay", ""),
+                    parseAnimators(object(animation, "animators"))
+                )
+            );
+        }
+
+        return List.copyOf(animations);
+    }
+
+    private static Map<String, ModelAnimator> parseAnimators(
+        JsonObject animators
+    ) throws BlockbenchModelException {
+        Map<String, ModelAnimator> result = new LinkedHashMap<>();
+
+        for (Map.Entry<String, JsonElement> entry : animators.entrySet()) {
+            String targetUuid = entry.getKey();
+
+            if (!entry.getValue().isJsonObject()) {
+                continue;
+            }
+
+            JsonObject animator = entry.getValue().getAsJsonObject();
+
+            if (targetUuid.isBlank()) {
+                throw new BlockbenchModelException(
+                    "An animator is missing its target UUID."
+                );
+            }
+
+            result.put(
+                targetUuid,
+                new ModelAnimator(
+                    targetUuid,
+                    string(animator, "name", ""),
+                    string(animator, "type", ""),
+                    bool(animator, "rotation_global", false),
+                    bool(animator, "quaternion_interpolation", false),
+                    parseKeyframes(array(animator, "keyframes"))
+                )
+            );
+        }
+
+        return result;
+    }
+
+    private static List<AnimationKeyframe> parseKeyframes(
+        JsonArray keyframes
+    ) throws BlockbenchModelException {
+        List<AnimationKeyframe> result = new ArrayList<>();
+
+        Set<String> keyframeIds = new HashSet<>();
+
+        for (JsonElement element : keyframes) {
+            if (!element.isJsonObject()) {
+                continue;
+            }
+
+            JsonObject keyframe = element.getAsJsonObject();
+
+            String uuid = string(keyframe, "uuid", "");
+
+            if (uuid.isBlank()) {
+                throw new BlockbenchModelException(
+                    "An animation keyframe is missing its UUID."
+                );
+            }
+
+            if (!keyframeIds.add(uuid)) {
+                throw new BlockbenchModelException(
+                    "Duplicate animation keyframe UUID: " + uuid
+                );
+            }
+
+            result.add(
+                new AnimationKeyframe(
+                    uuid,
+                    string(keyframe, "channel", ""),
+                    decimal(keyframe, "time", 0),
+                    string(keyframe, "interpolation", "linear"),
+                    integer(keyframe, "color", -1),
+                    parseAnimationDataPoints(array(keyframe, "data_points"))
+                )
+            );
+        }
+
+        return List.copyOf(result);
+    }
+
+    private static List<AnimationDataPoint> parseAnimationDataPoints(
+        JsonArray dataPoints
+    ) {
+        List<AnimationDataPoint> result = new ArrayList<>();
+
+        for (JsonElement element : dataPoints) {
+            if (!element.isJsonObject()) {
+                continue;
+            }
+
+            JsonObject dataPoint = element.getAsJsonObject();
+
+            result.add(
+                new AnimationDataPoint(
+                    string(dataPoint, "x", "0"),
+                    string(dataPoint, "y", "0"),
+                    string(dataPoint, "z", "0")
+                )
+            );
+        }
+
+        return List.copyOf(result);
     }
 
     private static List<ModelCube> parseCubes(

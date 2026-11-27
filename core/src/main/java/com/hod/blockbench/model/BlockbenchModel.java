@@ -4,6 +4,26 @@ import java.util.ArrayList;
 import java.util.List;
 
 public record BlockbenchModel(
+    String name,
+    String modelIdentifier,
+    ModelMetadata metadata,
+    List<ModelCube> cubes,
+    List<ModelOutlinerNode> outliner,
+    List<ModelTexture> textures,
+    List<ModelAnimation> animations,
+    String sourceJson
+) {
+    public BlockbenchModel {
+        cubes = List.copyOf(cubes);
+        outliner = List.copyOf(outliner);
+        textures = List.copyOf(textures);
+        animations = List.copyOf(animations);
+    }
+
+    /**
+     * Backwards-compatible constructor for models without animations.
+     */
+    public BlockbenchModel(
         String name,
         String modelIdentifier,
         ModelMetadata metadata,
@@ -11,11 +31,17 @@ public record BlockbenchModel(
         List<ModelOutlinerNode> outliner,
         List<ModelTexture> textures,
         String sourceJson
-) {
-    public BlockbenchModel {
-        cubes = List.copyOf(cubes);
-        outliner = List.copyOf(outliner);
-        textures = List.copyOf(textures);
+    ) {
+        this(
+            name,
+            modelIdentifier,
+            metadata,
+            cubes,
+            outliner,
+            textures,
+            List.of(),
+            sourceJson
+        );
     }
 
     /**
@@ -28,10 +54,11 @@ public record BlockbenchModel(
             return null;
         }
 
-        return cubes.stream()
-                .filter(cube -> cube.uuid().equals(uuid))
-                .findFirst()
-                .orElse(null);
+        return cubes
+            .stream()
+            .filter(cube -> cube.uuid().equals(uuid))
+            .findFirst()
+            .orElse(null);
     }
 
     /**
@@ -44,10 +71,40 @@ public record BlockbenchModel(
             return null;
         }
 
-        return textures.stream()
-                .filter(texture -> texture.id().equals(id))
-                .findFirst()
-                .orElse(null);
+        return textures
+            .stream()
+            .filter(texture -> texture.id().equals(id))
+            .findFirst()
+            .orElse(null);
+    }
+
+    /**
+     * Finds an animation by UUID.
+     */
+    public ModelAnimation findAnimation(String uuid) {
+        if (uuid == null) {
+            return null;
+        }
+
+        return animations
+            .stream()
+            .filter(animation -> animation.uuid().equals(uuid))
+            .findFirst()
+            .orElse(null);
+    }
+
+    /**
+     * Finds all animations with the specified name.
+     */
+    public List<ModelAnimation> findAnimationsByName(String name) {
+        if (name == null) {
+            return List.of();
+        }
+
+        return animations
+            .stream()
+            .filter(animation -> name.equals(animation.name()))
+            .toList();
     }
 
     /**
@@ -64,16 +121,15 @@ public record BlockbenchModel(
     }
 
     private ModelOutlinerNode findNodeByUuid(
-            List<ModelOutlinerNode> nodes,
-            String uuid
+        List<ModelOutlinerNode> nodes,
+        String uuid
     ) {
         for (ModelOutlinerNode node : nodes) {
             if (uuid.equals(node.uuid())) {
                 return node;
             }
 
-            ModelOutlinerNode result =
-                    findNodeByUuid(node.children(), uuid);
+            ModelOutlinerNode result = findNodeByUuid(node.children(), uuid);
 
             if (result != null) {
                 return result;
@@ -99,9 +155,9 @@ public record BlockbenchModel(
     }
 
     private void collectNodesByName(
-            List<ModelOutlinerNode> nodes,
-            String name,
-            List<ModelOutlinerNode> result
+        List<ModelOutlinerNode> nodes,
+        String name,
+        List<ModelOutlinerNode> result
     ) {
         for (ModelOutlinerNode node : nodes) {
             if (name.equals(node.name())) {
@@ -128,10 +184,7 @@ public record BlockbenchModel(
         return List.copyOf(result);
     }
 
-    private void collectCubes(
-            ModelOutlinerNode node,
-            List<ModelCube> result
-    ) {
+    private void collectCubes(ModelOutlinerNode node, List<ModelCube> result) {
         if (node.type() == ModelOutlinerNode.Type.CUBE) {
             ModelCube cube = findCube(node.cubeUuid());
 
