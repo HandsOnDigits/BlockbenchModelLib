@@ -4,7 +4,7 @@ import com.hod.blockbench.animation.AnimationTransform;
 import com.hod.blockbench.common.geometry.ModelGeometry;
 import com.hod.blockbench.common.geometry.ModelGeometryHierarchy;
 import com.hod.blockbench.common.geometry.ModelGeometryNode;
-import com.hod.blockbench.common.geometry.ModelQuad;
+import com.hod.blockbench.common.geometry.ModelTriangle;
 import com.hod.blockbench.common.geometry.ModelVertex;
 import com.hod.blockbench.common.render.texture.ModelTextureRegistration;
 import com.hod.blockbench.model.ModelVector3;
@@ -29,11 +29,10 @@ public final class BlockbenchModelRenderer {
 
     private BlockbenchModelRenderer() {}
 
-    /**
-     * Renders geometry using automatically selected Minecraft render buffers.
-     *
-     * Backface culling is enabled by default.
-     */
+    // ---------------------------------------------------------------------
+    // Flat geometry
+    // ---------------------------------------------------------------------
+
     public static void render(
         ModelGeometry geometry,
         PoseStack poseStack,
@@ -53,11 +52,6 @@ public final class BlockbenchModelRenderer {
         );
     }
 
-    /**
-     * Renders geometry with configurable double-sided rendering.
-     *
-     * @param doubleSided true to disable backface culling
-     */
     public static void render(
         ModelGeometry geometry,
         PoseStack poseStack,
@@ -81,12 +75,6 @@ public final class BlockbenchModelRenderer {
         );
     }
 
-    /**
-     * Renders geometry with a configurable RenderType for each texture.
-     *
-     * The RenderType factory receives the original texture index and
-     * its registered ResourceLocation.
-     */
     public static void render(
         ModelGeometry geometry,
         PoseStack poseStack,
@@ -107,38 +95,28 @@ public final class BlockbenchModelRenderer {
 
         Map<Integer, VertexConsumer> consumers = new HashMap<>();
 
-        for (ModelQuad quad : geometry.quads()) {
-            int textureIndex = quad.texture();
+        IntFunction<VertexConsumer> consumerProvider = index ->
+            consumers.computeIfAbsent(index, textureIndex -> {
+                ResourceLocation location = textures.require(textureIndex);
 
-            VertexConsumer consumer = consumers.computeIfAbsent(
-                textureIndex,
-                index -> {
-                    ResourceLocation location = textures.require(index);
+                RenderType renderType = Objects.requireNonNull(
+                    renderTypes.apply(textureIndex, location),
+                    "RenderType factory returned null for texture " +
+                        textureIndex
+                );
 
-                    RenderType renderType = Objects.requireNonNull(
-                        renderTypes.apply(index, location),
-                        "RenderType factory returned null for texture " + index
-                    );
+                return buffers.getBuffer(renderType);
+            });
 
-                    return buffers.getBuffer(renderType);
-                }
-            );
-
-            renderQuad(
-                quad,
-                poseStack.last(),
-                consumer,
-                packedLight,
-                packedOverlay
-            );
-        }
+        renderTriangles(
+            geometry.triangles(),
+            poseStack,
+            consumerProvider,
+            packedLight,
+            packedOverlay
+        );
     }
 
-    /**
-     * Renders geometry using a VertexConsumer selected by texture index.
-     *
-     * The supplied PoseStack is not modified.
-     */
     public static void render(
         ModelGeometry geometry,
         PoseStack poseStack,
@@ -150,23 +128,15 @@ public final class BlockbenchModelRenderer {
         Objects.requireNonNull(poseStack, "PoseStack cannot be null.");
         Objects.requireNonNull(consumers, "Consumer provider cannot be null.");
 
-        PoseStack.Pose pose = poseStack.last();
-
-        for (ModelQuad quad : geometry.quads()) {
-            VertexConsumer consumer = Objects.requireNonNull(
-                consumers.apply(quad.texture()),
-                "No VertexConsumer supplied for texture index " + quad.texture()
-            );
-
-            renderQuad(quad, pose, consumer, packedLight, packedOverlay);
-        }
+        renderTriangles(
+            geometry.triangles(),
+            poseStack,
+            consumers,
+            packedLight,
+            packedOverlay
+        );
     }
 
-    /**
-     * Renders all geometry into a single VertexConsumer.
-     *
-     * Only use when all faces share the same render type and texture.
-     */
     public static void render(
         ModelGeometry geometry,
         PoseStack poseStack,
@@ -185,35 +155,10 @@ public final class BlockbenchModelRenderer {
         );
     }
 
-    private static void renderQuad(
-        ModelQuad quad,
-        PoseStack.Pose pose,
-        VertexConsumer consumer,
-        int packedLight,
-        int packedOverlay
-    ) {
-        for (ModelVertex vertex : quad.vertices()) {
-            var position = vertex.position();
-            var normal = vertex.normal();
+    // ---------------------------------------------------------------------
+    // Hierarchical geometry
+    // ---------------------------------------------------------------------
 
-            consumer
-                .addVertex(
-                    pose,
-                    position.x() / BLOCKBENCH_UNITS_PER_BLOCK,
-                    position.y() / BLOCKBENCH_UNITS_PER_BLOCK,
-                    position.z() / BLOCKBENCH_UNITS_PER_BLOCK
-                )
-                .setColor(1.0f, 1.0f, 1.0f, 1.0f)
-                .setUv(vertex.u(), vertex.v())
-                .setOverlay(packedOverlay)
-                .setLight(packedLight)
-                .setNormal(pose, normal.x(), normal.y(), normal.z());
-        }
-    }
-
-    /**
-     * Renders hierarchical geometry with configurable double-sided rendering.
-     */
     public static void render(
         ModelGeometryHierarchy geometry,
         PoseStack poseStack,
@@ -237,9 +182,6 @@ public final class BlockbenchModelRenderer {
         );
     }
 
-    /**
-     * Renders hierarchical geometry with a configurable RenderType per texture.
-     */
     public static void render(
         ModelGeometryHierarchy geometry,
         PoseStack poseStack,
@@ -283,9 +225,6 @@ public final class BlockbenchModelRenderer {
         );
     }
 
-    /**
-     * Renders hierarchical geometry using a VertexConsumer selected by texture.
-     */
     public static void render(
         ModelGeometryHierarchy geometry,
         PoseStack poseStack,
@@ -307,9 +246,6 @@ public final class BlockbenchModelRenderer {
         );
     }
 
-    /**
-     * Renders hierarchical geometry into a single VertexConsumer.
-     */
     public static void render(
         ModelGeometryHierarchy geometry,
         PoseStack poseStack,
@@ -328,6 +264,84 @@ public final class BlockbenchModelRenderer {
         );
     }
 
+    public static void render(
+        ModelGeometryHierarchy geometry,
+        PoseStack poseStack,
+        ModelTextureRegistration textures,
+        MultiBufferSource buffers,
+        boolean doubleSided,
+        Map<String, AnimationTransform> animations,
+        int packedLight,
+        int packedOverlay
+    ) {
+        Objects.requireNonNull(
+            animations,
+            "Animation transforms cannot be null."
+        );
+
+        render(
+            geometry,
+            poseStack,
+            textures,
+            buffers,
+            (index, location) ->
+                doubleSided
+                    ? RenderType.entityCutoutNoCull(location)
+                    : RenderType.entityCutout(location),
+            animations,
+            packedLight,
+            packedOverlay
+        );
+    }
+
+    public static void render(
+        ModelGeometryHierarchy geometry,
+        PoseStack poseStack,
+        ModelTextureRegistration textures,
+        MultiBufferSource buffers,
+        BiFunction<Integer, ResourceLocation, RenderType> renderTypes,
+        Map<String, AnimationTransform> animations,
+        int packedLight,
+        int packedOverlay
+    ) {
+        Objects.requireNonNull(geometry, "Geometry cannot be null.");
+        Objects.requireNonNull(poseStack, "PoseStack cannot be null.");
+        Objects.requireNonNull(textures, "Textures cannot be null.");
+        Objects.requireNonNull(buffers, "Buffer source cannot be null.");
+        Objects.requireNonNull(
+            renderTypes,
+            "Render type factory cannot be null."
+        );
+        Objects.requireNonNull(
+            animations,
+            "Animation transforms cannot be null."
+        );
+
+        Map<Integer, VertexConsumer> consumers = new HashMap<>();
+
+        IntFunction<VertexConsumer> consumerProvider = index ->
+            consumers.computeIfAbsent(index, textureIndex -> {
+                ResourceLocation location = textures.require(textureIndex);
+
+                RenderType renderType = Objects.requireNonNull(
+                    renderTypes.apply(textureIndex, location),
+                    "RenderType factory returned null for texture " +
+                        textureIndex
+                );
+
+                return buffers.getBuffer(renderType);
+            });
+
+        renderHierarchy(
+            geometry,
+            poseStack,
+            consumerProvider,
+            animations,
+            packedLight,
+            packedOverlay
+        );
+    }
+
     private static void renderHierarchy(
         ModelGeometryHierarchy geometry,
         PoseStack poseStack,
@@ -336,8 +350,8 @@ public final class BlockbenchModelRenderer {
         int packedLight,
         int packedOverlay
     ) {
-        renderQuads(
-            geometry.rootQuads(),
+        renderTriangles(
+            geometry.rootTriangles(),
             poseStack,
             consumers,
             packedLight,
@@ -369,8 +383,8 @@ public final class BlockbenchModelRenderer {
         try {
             applyNodeTransform(node, poseStack, animations.get(node.uuid()));
 
-            renderQuads(
-                node.quads(),
+            renderTriangles(
+                node.triangles(),
                 poseStack,
                 consumers,
                 packedLight,
@@ -391,6 +405,10 @@ public final class BlockbenchModelRenderer {
             poseStack.popPose();
         }
     }
+
+    // ---------------------------------------------------------------------
+    // Animation transforms
+    // ---------------------------------------------------------------------
 
     private static void applyNodeTransform(
         ModelGeometryNode node,
@@ -416,21 +434,18 @@ public final class BlockbenchModelRenderer {
 
         float units = BLOCKBENCH_UNITS_PER_BLOCK;
 
-        // Apply animated translation.
         poseStack.translate(
             position.x() / units,
             position.y() / units,
             position.z() / units
         );
 
-        // Move to the group pivot.
         poseStack.translate(
             origin.x() / units,
             origin.y() / units,
             origin.z() / units
         );
 
-        // Combine base and animated rotation.
         poseStack.mulPose(
             Axis.ZP.rotationDegrees(baseRotation.z() + animatedRotation.z())
         );
@@ -441,10 +456,8 @@ public final class BlockbenchModelRenderer {
             Axis.XP.rotationDegrees(baseRotation.x() + animatedRotation.x())
         );
 
-        // Apply animated scale around the pivot.
         poseStack.scale(scale.x(), scale.y(), scale.z());
 
-        // Move back from the pivot.
         poseStack.translate(
             -origin.x() / units,
             -origin.y() / units,
@@ -452,8 +465,12 @@ public final class BlockbenchModelRenderer {
         );
     }
 
-    private static void renderQuads(
-        java.util.List<ModelQuad> quads,
+    // ---------------------------------------------------------------------
+    // Triangle submission
+    // ---------------------------------------------------------------------
+
+    private static void renderTriangles(
+        java.util.List<ModelTriangle> triangles,
         PoseStack poseStack,
         IntFunction<VertexConsumer> consumers,
         int packedLight,
@@ -461,101 +478,73 @@ public final class BlockbenchModelRenderer {
     ) {
         PoseStack.Pose pose = poseStack.last();
 
-        for (ModelQuad quad : quads) {
+        for (ModelTriangle triangle : triangles) {
             VertexConsumer consumer = Objects.requireNonNull(
-                consumers.apply(quad.texture()),
-                "No VertexConsumer supplied for texture index " + quad.texture()
+                consumers.apply(triangle.texture()),
+                "No VertexConsumer supplied for texture index " +
+                    triangle.texture()
             );
 
-            renderQuad(quad, pose, consumer, packedLight, packedOverlay);
+            renderTriangle(
+                triangle,
+                pose,
+                consumer,
+                packedLight,
+                packedOverlay
+            );
         }
     }
 
     /**
-     * Renders hierarchical geometry with evaluated animation transforms.
+     * Minecraft's entity cutout render types use quad vertices.
      *
-     * Animation transforms are matched to geometry nodes by UUID.
-     * Nodes without an animation transform retain their base transforms.
+     * A triangle is submitted as a degenerate quad:
+     * v0, v1, v2, v2.
+     *
+     * The duplicated final vertex creates a zero-area second triangle,
+     * leaving the intended triangle visible.
      */
-    public static void render(
-        ModelGeometryHierarchy geometry,
-        PoseStack poseStack,
-        ModelTextureRegistration textures,
-        MultiBufferSource buffers,
-        boolean doubleSided,
-        Map<String, AnimationTransform> animations,
+    private static void renderTriangle(
+        ModelTriangle triangle,
+        PoseStack.Pose pose,
+        VertexConsumer consumer,
         int packedLight,
         int packedOverlay
     ) {
-        Objects.requireNonNull(
-            animations,
-            "Animation transforms cannot be null."
-        );
+        for (ModelVertex vertex : triangle.vertices()) {
+            renderVertex(vertex, pose, consumer, packedLight, packedOverlay);
+        }
 
-        render(
-            geometry,
-            poseStack,
-            textures,
-            buffers,
-            (index, location) ->
-                doubleSided
-                    ? RenderType.entityCutoutNoCull(location)
-                    : RenderType.entityCutout(location),
-            animations,
+        renderVertex(
+            triangle.vertices().get(2),
+            pose,
+            consumer,
             packedLight,
             packedOverlay
         );
     }
 
-    /**
-     * Renders hierarchical geometry with animated transforms and
-     * a configurable RenderType per texture.
-     */
-    public static void render(
-        ModelGeometryHierarchy geometry,
-        PoseStack poseStack,
-        ModelTextureRegistration textures,
-        MultiBufferSource buffers,
-        BiFunction<Integer, ResourceLocation, RenderType> renderTypes,
-        Map<String, AnimationTransform> animations,
+    private static void renderVertex(
+        ModelVertex vertex,
+        PoseStack.Pose pose,
+        VertexConsumer consumer,
         int packedLight,
         int packedOverlay
     ) {
-        Objects.requireNonNull(geometry, "Geometry cannot be null.");
-        Objects.requireNonNull(poseStack, "PoseStack cannot be null.");
-        Objects.requireNonNull(textures, "Textures cannot be null.");
-        Objects.requireNonNull(buffers, "Buffer source cannot be null.");
-        Objects.requireNonNull(
-            renderTypes,
-            "Render type factory cannot be null."
-        );
-        Objects.requireNonNull(
-            animations,
-            "Animation transforms cannot be null."
-        );
+        ModelVector3 position = vertex.position();
+        ModelVector3 normal = vertex.normal();
 
-        Map<Integer, VertexConsumer> consumers = new HashMap<>();
-
-        IntFunction<VertexConsumer> consumerProvider = index ->
-            consumers.computeIfAbsent(index, textureIndex -> {
-                ResourceLocation location = textures.require(textureIndex);
-
-                RenderType renderType = Objects.requireNonNull(
-                    renderTypes.apply(textureIndex, location),
-                    "RenderType factory returned null for texture " +
-                        textureIndex
-                );
-
-                return buffers.getBuffer(renderType);
-            });
-
-        renderHierarchy(
-            geometry,
-            poseStack,
-            consumerProvider,
-            animations,
-            packedLight,
-            packedOverlay
-        );
+        consumer
+            .addVertex(
+                pose,
+                position.x() / BLOCKBENCH_UNITS_PER_BLOCK,
+                position.y() / BLOCKBENCH_UNITS_PER_BLOCK,
+                position.z() / BLOCKBENCH_UNITS_PER_BLOCK
+            )
+            .setColor(1.0f, 1.0f, 1.0f, 1.0f)
+            .setUv(vertex.u(), vertex.v())
+            .setOverlay(packedOverlay)
+            .setLight(packedLight)
+            .setNormal(pose, normal.x(), normal.y(), normal.z());
     }
 }

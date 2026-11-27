@@ -3,9 +3,9 @@ package com.hod.blockbench.common.geometry;
 import java.util.List;
 import java.util.Optional;
 
-public record ModelGeometry(List<ModelQuad> quads) {
+public record ModelGeometry(List<ModelTriangle> triangles) {
     public ModelGeometry {
-        quads = List.copyOf(quads);
+        triangles = List.copyOf(triangles);
     }
 
     /**
@@ -14,6 +14,6 @@ public record ModelGeometry(List<ModelQuad> quads) {
      * Coordinates are expressed in Blockbench model units.
      */
     public Optional<ModelBounds> bounds() {
-        return ModelBounds.from(quads);
+        return ModelBounds.fromTriangles(triangles);
     }
 }

@@ -10,10 +10,10 @@ import java.util.List;
  */
 public record ModelGeometryHierarchy(
     List<ModelGeometryNode> roots,
-    List<ModelQuad> rootQuads
+    List<ModelTriangle> rootTriangles
 ) {
     public ModelGeometryHierarchy {
         roots = List.copyOf(roots);
-        rootQuads = List.copyOf(rootQuads);
+        rootTriangles = List.copyOf(rootTriangles);
     }
 }

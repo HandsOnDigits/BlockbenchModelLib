@@ -4,16 +4,14 @@ import static org.junit.jupiter.api.Assertions.*;
 
 import com.hod.blockbench.loader.BlockbenchModelLoader;
 import com.hod.blockbench.model.BlockbenchModel;
-import com.hod.blockbench.model.ModelCube;
+import com.hod.blockbench.model.ModelElement;
 import com.hod.blockbench.model.ModelFace;
 import com.hod.blockbench.model.ModelOutlinerNode;
 import com.hod.blockbench.model.ModelTexture;
-import com.hod.blockbench.model.ModelUvTransform;
 import com.hod.blockbench.validation.BlockbenchModelValidator;
 import com.hod.blockbench.validation.ValidationIssue;
 import com.hod.blockbench.validation.ValidationSeverity;
 import java.io.ByteArrayInputStream;
-import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.HashSet;
@@ -24,7 +22,7 @@ import org.junit.jupiter.api.Test;
 class BlockbenchModelLoaderTest {
 
     @Test
-    void nestedOutlinerGroupsPreserveHierarchyAndCubeReferences() throws Exception {
+    void nestedOutlinerGroupsPreserveHierarchyAndElementReferences() throws Exception {
         String json = """
         {
           "name": "Nested Group Test",
@@ -123,8 +121,10 @@ class BlockbenchModelLoaderTest {
             new ByteArrayInputStream(json.getBytes(StandardCharsets.UTF_8))
         );
 
+        assertEquals(4, model.elements().size());
         assertEquals(1, model.outliner().size());
 
+        // Root group
         ModelOutlinerNode root = model.outliner().getFirst();
 
         assertTrue(root.isGroup());
@@ -145,27 +145,52 @@ class BlockbenchModelLoaderTest {
         assertEquals("Inner", inner.name());
         assertEquals(2, inner.children().size());
 
-        // Cubes inside the innermost group
-        ModelOutlinerNode cube1 = inner.children().get(0);
-        ModelOutlinerNode cube2 = inner.children().get(1);
+        // Elements inside the innermost group
+        ModelOutlinerNode element1 = inner.children().get(0);
+        ModelOutlinerNode element2 = inner.children().get(1);
 
-        assertTrue(cube1.isCube());
-        assertTrue(cube2.isCube());
+        assertTrue(element1.isElement());
+        assertTrue(element2.isElement());
 
-        assertEquals("cube-1", cube1.cubeUuid());
-        assertEquals("cube-2", cube2.cubeUuid());
+        assertEquals("cube-1", element1.elementUuid());
+        assertEquals("cube-2", element2.elementUuid());
 
-        // Cube directly inside Middle
-        ModelOutlinerNode cube3 = middle.children().get(1);
+        // Element directly inside Middle
+        ModelOutlinerNode element3 = middle.children().get(1);
 
-        assertTrue(cube3.isCube());
-        assertEquals("cube-3", cube3.cubeUuid());
+        assertTrue(element3.isElement());
+        assertEquals("cube-3", element3.elementUuid());
 
-        // Cube directly inside Root
-        ModelOutlinerNode cube4 = root.children().get(1);
+        // Element directly inside Root
+        ModelOutlinerNode element4 = root.children().get(1);
 
-        assertTrue(cube4.isCube());
-        assertEquals("cube-4", cube4.cubeUuid());
+        assertTrue(element4.isElement());
+        assertEquals("cube-4", element4.elementUuid());
+
+        // Verify that all outliner references resolve to parsed elements.
+        for (String uuid : List.of("cube-1", "cube-2", "cube-3", "cube-4")) {
+            ModelElement element = model.findElement(uuid).orElseThrow();
+
+            assertEquals(uuid, element.uuid());
+        }
+
+        assertEquals(
+            List.of("cube-1", "cube-2"),
+            model
+                .findElementsInNode(inner)
+                .stream()
+                .map(ModelElement::uuid)
+                .toList()
+        );
+
+        assertEquals(
+            List.of("cube-1", "cube-2", "cube-3", "cube-4"),
+            model
+                .findAllOutlinerElements()
+                .stream()
+                .map(ModelElement::uuid)
+                .toList()
+        );
     }
 
     @Test

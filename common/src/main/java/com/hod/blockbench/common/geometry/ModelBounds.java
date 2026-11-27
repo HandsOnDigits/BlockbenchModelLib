@@ -36,12 +36,14 @@ public record ModelBounds(ModelVector3 min, ModelVector3 max) {
     }
 
     /**
-     * Calculates bounds from generated model quads.
+     * Calculates bounds from generated triangles.
      *
      * @return empty when the geometry contains no vertices
      */
-    public static Optional<ModelBounds> from(List<ModelQuad> quads) {
-        Objects.requireNonNull(quads, "Quads cannot be null.");
+    public static Optional<ModelBounds> fromTriangles(
+        List<ModelTriangle> triangles
+    ) {
+        Objects.requireNonNull(triangles, "Triangles cannot be null.");
 
         float minX = Float.POSITIVE_INFINITY;
         float minY = Float.POSITIVE_INFINITY;
@@ -51,8 +53,8 @@ public record ModelBounds(ModelVector3 min, ModelVector3 max) {
         float maxY = Float.NEGATIVE_INFINITY;
         float maxZ = Float.NEGATIVE_INFINITY;
 
-        for (ModelQuad quad : quads) {
-            for (ModelVertex vertex : quad.vertices()) {
+        for (ModelTriangle triangle : triangles) {
+            for (ModelVertex vertex : triangle.vertices()) {
                 ModelVector3 position = vertex.position();
 
                 minX = Math.min(minX, position.x());

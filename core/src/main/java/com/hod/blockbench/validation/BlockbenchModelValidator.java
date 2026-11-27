@@ -1,7 +1,6 @@
 package com.hod.blockbench.validation;
 
 import com.hod.blockbench.model.*;
-
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.HashSet;
@@ -10,8 +9,7 @@ import java.util.Set;
 
 public final class BlockbenchModelValidator {
 
-    private BlockbenchModelValidator() {
-    }
+    private BlockbenchModelValidator() {}
 
     /**
      * Validates a parsed Blockbench model.
@@ -27,7 +25,7 @@ public final class BlockbenchModelValidator {
         }
 
         validateMetadata(model, issues);
-        validateCubes(model, issues);
+        validateElements(model, issues);
         validateTextures(model, issues);
         validateOutliner(model, issues);
 
@@ -39,37 +37,38 @@ public final class BlockbenchModelValidator {
      * Warnings do not make a model invalid.
      */
     public static boolean isValid(BlockbenchModel model) {
-        return validate(model).stream()
-                .noneMatch(issue ->
-                        issue.severity() == ValidationSeverity.ERROR
-                );
+        return validate(model)
+            .stream()
+            .noneMatch(issue -> issue.severity() == ValidationSeverity.ERROR);
     }
 
     /**
      * Returns only validation errors, excluding warnings.
      */
     public static List<ValidationIssue> getErrors(BlockbenchModel model) {
-        return validate(model).stream()
-                .filter(issue ->
-                        issue.severity() == ValidationSeverity.ERROR
-                )
-                .toList();
+        return validate(model)
+            .stream()
+            .filter(issue -> issue.severity() == ValidationSeverity.ERROR)
+            .toList();
     }
 
     /**
      * Returns only validation warnings.
      */
     public static List<ValidationIssue> getWarnings(BlockbenchModel model) {
-        return validate(model).stream()
-                .filter(issue ->
-                        issue.severity() == ValidationSeverity.WARNING
-                )
-                .toList();
+        return validate(model)
+            .stream()
+            .filter(issue -> issue.severity() == ValidationSeverity.WARNING)
+            .toList();
     }
 
+    // ---------------------------------------------------------------------
+    // Metadata
+    // ---------------------------------------------------------------------
+
     private static void validateMetadata(
-            BlockbenchModel model,
-            List<ValidationIssue> issues
+        BlockbenchModel model,
+        List<ValidationIssue> issues
     ) {
         ModelMetadata metadata = model.metadata();
 
@@ -80,182 +79,249 @@ public final class BlockbenchModelValidator {
 
         if (metadata.textureWidth() <= 0) {
             addError(
-                    issues,
-                    "meta.texture_width",
-                    "Texture width must be greater than zero."
+                issues,
+                "meta.texture_width",
+                "Texture width must be greater than zero."
             );
         }
 
         if (metadata.textureHeight() <= 0) {
             addError(
-                    issues,
-                    "meta.texture_height",
-                    "Texture height must be greater than zero."
+                issues,
+                "meta.texture_height",
+                "Texture height must be greater than zero."
             );
         }
     }
 
-    private static void validateCubes(
-            BlockbenchModel model,
-            List<ValidationIssue> issues
-    ) {
-        Set<String> cubeUuids = new HashSet<>();
+    // ---------------------------------------------------------------------
+    // Elements and polygon geometry
+    // ---------------------------------------------------------------------
 
-        for (int i = 0; i < model.cubes().size(); i++) {
-            ModelCube cube = model.cubes().get(i);
+    private static void validateElements(
+        BlockbenchModel model,
+        List<ValidationIssue> issues
+    ) {
+        Set<String> elementUuids = new HashSet<>();
+
+        for (int i = 0; i < model.elements().size(); i++) {
+            ModelElement element = model.elements().get(i);
             String path = "elements[" + i + "]";
 
-            if (cube == null) {
-                addError(issues, path, "Cube is null.");
+            if (element == null) {
+                addError(issues, path, "Element is null.");
                 continue;
             }
 
-            String uuid = cube.uuid();
+            String uuid = element.uuid();
 
             if (uuid == null || uuid.isBlank()) {
-                addError(issues, path + ".uuid", "Cube UUID is missing.");
-            } else if (!cubeUuids.add(uuid)) {
+                addError(issues, path + ".uuid", "Element UUID is missing.");
+            } else if (!elementUuids.add(uuid)) {
                 addError(
-                        issues,
-                        path + ".uuid",
-                        "Duplicate cube UUID: " + uuid
+                    issues,
+                    path + ".uuid",
+                    "Duplicate element UUID: " + uuid
                 );
             }
 
-            if (cube.from() == null || cube.to() == null) {
+            if (element.origin() == null) {
                 addError(
-                        issues,
-                        path,
-                        "Cube has missing geometry."
+                    issues,
+                    path + ".origin",
+                    "Element origin is missing."
                 );
-                continue;
-            }
-
-            if (!isFinite(cube.from()) || !isFinite(cube.to())) {
+            } else if (!isFinite(element.origin())) {
                 addError(
-                        issues,
-                        path,
-                        "Cube has non-finite coordinates."
-                );
-                continue;
-            }
-
-            if (cube.from().x() > cube.to().x()
-                    || cube.from().y() > cube.to().y()
-                    || cube.from().z() > cube.to().z()) {
-                addError(
-                        issues,
-                        path,
-                        "Cube has inverted dimensions."
+                    issues,
+                    path + ".origin",
+                    "Element origin contains non-finite coordinates."
                 );
             }
 
-            if (cube.origin() != null && !isFinite(cube.origin())) {
+            if (element.rotation() == null) {
                 addError(
-                        issues,
-                        path + ".origin",
-                        "Cube origin contains non-finite coordinates."
+                    issues,
+                    path + ".rotation",
+                    "Element rotation is missing."
+                );
+            } else if (!isFinite(element.rotation())) {
+                addError(
+                    issues,
+                    path + ".rotation",
+                    "Element rotation contains non-finite values."
                 );
             }
 
-            if (cube.rotation() != null && !isFinite(cube.rotation())) {
-                addError(
-                        issues,
-                        path + ".rotation",
-                        "Cube rotation contains non-finite values."
-                );
-            }
-
-            if (!Float.isFinite(cube.inflate())) {
-                addError(
-                        issues,
-                        path + ".inflate",
-                        "Cube inflate value is not finite."
-                );
-            }
-
-            validateFaces(model, cube, path, issues);
+            validateElementVertices(element, path, issues);
+            validateElementFaces(model, element, path, issues);
         }
     }
 
-    private static void validateFaces(
-            BlockbenchModel model,
-            ModelCube cube,
-            String cubePath,
-            List<ValidationIssue> issues
+    private static void validateElementVertices(
+        ModelElement element,
+        String elementPath,
+        List<ValidationIssue> issues
     ) {
-        for (var entry : cube.faces().entrySet()) {
-            ModelFace.Direction direction = entry.getKey();
-            ModelFace face = entry.getValue();
+        Set<String> vertexUuids = new HashSet<>();
 
-            String path = cubePath + ".faces." +
-                    (direction == null
-                            ? "unknown"
-                            : direction.name().toLowerCase());
+        for (var entry : element.vertices().entrySet()) {
+            String uuid = entry.getKey();
+            ModelVector3 position = entry.getValue();
+            String path = elementPath + ".vertices." + uuid;
 
-            if (direction == null) {
+            if (uuid == null || uuid.isBlank()) {
                 addError(
-                        issues,
-                        cubePath + ".faces",
-                        "Face has no direction."
+                    issues,
+                    elementPath + ".vertices",
+                    "Vertex UUID is missing."
                 );
                 continue;
             }
+
+            if (!vertexUuids.add(uuid)) {
+                addError(issues, path, "Duplicate vertex UUID: " + uuid);
+            }
+
+            if (position == null) {
+                addError(issues, path, "Vertex position is missing.");
+            } else if (!isFinite(position)) {
+                addError(
+                    issues,
+                    path,
+                    "Vertex contains non-finite coordinates."
+                );
+            }
+        }
+    }
+
+    private static void validateElementFaces(
+        BlockbenchModel model,
+        ModelElement element,
+        String elementPath,
+        List<ValidationIssue> issues
+    ) {
+        Set<String> faceUuids = new HashSet<>();
+
+        for (int i = 0; i < element.faces().size(); i++) {
+            ModelPolygonFace face = element.faces().get(i);
+            String path = elementPath + ".faces[" + i + "]";
 
             if (face == null) {
                 addError(issues, path, "Face is null.");
                 continue;
             }
 
-            if (face.direction() != direction) {
+            String faceUuid = face.uuid();
+
+            if (faceUuid != null && !faceUuid.isBlank()) {
+                if (!faceUuids.add(faceUuid)) {
+                    addError(
+                        issues,
+                        path + ".uuid",
+                        "Duplicate face UUID: " + faceUuid
+                    );
+                }
+            }
+
+            if (face.vertices() == null || face.vertices().size() < 3) {
                 addError(
-                        issues,
-                        path,
-                        "Face direction does not match its map key."
+                    issues,
+                    path + ".vertices",
+                    "A polygon face must contain at least three vertices."
                 );
+                continue;
             }
 
-            if (face.uv() == null || !isFinite(face.uv())) {
-                addError(
+            Set<String> referencedVertices = new HashSet<>();
+
+            for (
+                int cornerIndex = 0;
+                cornerIndex < face.vertices().size();
+                cornerIndex++
+            ) {
+                ModelFaceVertex corner = face.vertices().get(cornerIndex);
+                String cornerPath = path + ".vertices[" + cornerIndex + "]";
+
+                if (corner == null) {
+                    addError(issues, cornerPath, "Face corner is null.");
+                    continue;
+                }
+
+                String vertexUuid = corner.vertexUuid();
+
+                if (vertexUuid == null || vertexUuid.isBlank()) {
+                    addError(
                         issues,
-                        path + ".uv",
-                        "Face has invalid UV coordinates."
-                );
+                        cornerPath + ".vertexUuid",
+                        "Face corner has no vertex UUID."
+                    );
+                } else {
+                    if (!element.vertices().containsKey(vertexUuid)) {
+                        addError(
+                            issues,
+                            cornerPath + ".vertexUuid",
+                            "Face references missing vertex: " + vertexUuid
+                        );
+                    }
+
+                    if (!referencedVertices.add(vertexUuid)) {
+                        addWarning(
+                            issues,
+                            cornerPath + ".vertexUuid",
+                            "Face references the same vertex more than once: " +
+                                vertexUuid
+                        );
+                    }
+                }
+
+                if (
+                    !Float.isFinite(corner.u()) || !Float.isFinite(corner.v())
+                ) {
+                    addError(
+                        issues,
+                        cornerPath + ".uv",
+                        "Face corner has non-finite UV coordinates."
+                    );
+                }
             }
 
-            int rotation = face.rotation();
-
-            if (rotation != 0 && rotation != 90
-                    && rotation != 180 && rotation != 270) {
-                addError(
-                        issues,
-                        path + ".rotation",
-                        "Unsupported UV rotation: " + rotation
-                );
-            }
-
-            if (face.texture() < -1
-                    || face.texture() >= model.textures().size()) {
-                addError(
-                        issues,
-                        path + ".texture",
-                        "Invalid texture index: " + face.texture()
-                );
-            }
-
-            if (face.texture() == -1) {
-                addWarning(
-                        issues,
-                        path + ".texture",
-                        "Face has no texture assigned."
-                );
-            }
+            validateFaceTexture(model, face, path, issues);
         }
     }
 
+    private static void validateFaceTexture(
+        BlockbenchModel model,
+        ModelPolygonFace face,
+        String path,
+        List<ValidationIssue> issues
+    ) {
+        int texture = face.texture();
+
+        if (texture < -1 || texture >= model.textures().size()) {
+            addError(
+                issues,
+                path + ".texture",
+                "Invalid texture index: " + texture
+            );
+        }
+
+        if (texture == -1) {
+            addWarning(
+                issues,
+                path + ".texture",
+                "Face has no texture assigned."
+            );
+        }
+    }
+
+    // ---------------------------------------------------------------------
+    // Textures
+    // ---------------------------------------------------------------------
+
     private static void validateTextures(
-            BlockbenchModel model,
-            List<ValidationIssue> issues
+        BlockbenchModel model,
+        List<ValidationIssue> issues
     ) {
         Set<String> textureIds = new HashSet<>();
 
@@ -273,26 +339,22 @@ public final class BlockbenchModelValidator {
             if (id == null || id.isBlank()) {
                 addError(issues, path + ".id", "Texture ID is missing.");
             } else if (!textureIds.add(id)) {
-                addError(
-                        issues,
-                        path + ".id",
-                        "Duplicate texture ID: " + id
-                );
+                addError(issues, path + ".id", "Duplicate texture ID: " + id);
             }
 
             if (texture.width() <= 0 || texture.height() <= 0) {
                 addError(
-                        issues,
-                        path,
-                        "Texture dimensions must be greater than zero."
+                    issues,
+                    path,
+                    "Texture dimensions must be greater than zero."
                 );
             }
 
             if (texture.uvWidth() <= 0 || texture.uvHeight() <= 0) {
                 addError(
-                        issues,
-                        path,
-                        "Texture UV dimensions must be greater than zero."
+                    issues,
+                    path,
+                    "Texture UV dimensions must be greater than zero."
                 );
             }
 
@@ -301,15 +363,15 @@ public final class BlockbenchModelValidator {
     }
 
     private static void validateTextureImage(
-            ModelTexture texture,
-            String path,
-            List<ValidationIssue> issues
+        ModelTexture texture,
+        String path,
+        List<ValidationIssue> issues
     ) {
         if (!texture.hasEmbeddedImage()) {
             addWarning(
-                    issues,
-                    path + ".source",
-                    "Texture has no embedded image data."
+                issues,
+                path + ".source",
+                "Texture has no embedded image data."
             );
             return;
         }
@@ -317,70 +379,79 @@ public final class BlockbenchModelValidator {
         try {
             var image = texture.decodeImage();
 
-            if (texture.width() > 0
-                    && texture.height() > 0
-                    && (image.getWidth() != texture.width()
-                    || image.getHeight() != texture.height())) {
+            if (
+                texture.width() > 0 &&
+                texture.height() > 0 &&
+                (image.getWidth() != texture.width() ||
+                    image.getHeight() != texture.height())
+            ) {
                 addError(
-                        issues,
-                        path,
-                        "Embedded image dimensions do not match " +
-                                "the declared texture dimensions."
+                    issues,
+                    path,
+                    "Embedded image dimensions do not match " +
+                        "the declared texture dimensions."
                 );
             }
         } catch (IOException exception) {
             addError(
-                    issues,
-                    path + ".source",
-                    "Embedded texture image could not be decoded: " +
-                            exception.getMessage()
+                issues,
+                path + ".source",
+                "Embedded texture image could not be decoded: " +
+                    exception.getMessage()
             );
         }
     }
 
-    private static void validateOutliner(
-            BlockbenchModel model,
-            List<ValidationIssue> issues
-    ) {
-        Set<String> knownCubeUuids = new HashSet<>();
+    // ---------------------------------------------------------------------
+    // Outliner
+    // ---------------------------------------------------------------------
 
-        for (ModelCube cube : model.cubes()) {
-            if (cube != null && cube.uuid() != null
-                    && !cube.uuid().isBlank()) {
-                knownCubeUuids.add(cube.uuid());
+    private static void validateOutliner(
+        BlockbenchModel model,
+        List<ValidationIssue> issues
+    ) {
+        Set<String> knownElementUuids = new HashSet<>();
+
+        for (ModelElement element : model.elements()) {
+            if (
+                element != null &&
+                element.uuid() != null &&
+                !element.uuid().isBlank()
+            ) {
+                knownElementUuids.add(element.uuid());
             }
         }
 
-        Set<String> referencedCubeUuids = new HashSet<>();
+        Set<String> referencedElementUuids = new HashSet<>();
         Set<String> nodeUuids = new HashSet<>();
 
         validateOutlinerNodes(
-                model.outliner(),
-                "outliner",
-                knownCubeUuids,
-                referencedCubeUuids,
-                nodeUuids,
-                issues
+            model.outliner(),
+            "outliner",
+            knownElementUuids,
+            referencedElementUuids,
+            nodeUuids,
+            issues
         );
 
-        for (String uuid : knownCubeUuids) {
-            if (!referencedCubeUuids.contains(uuid)) {
+        for (String uuid : knownElementUuids) {
+            if (!referencedElementUuids.contains(uuid)) {
                 addError(
-                        issues,
-                        "outliner",
-                        "Cube is missing from outliner: " + uuid
+                    issues,
+                    "outliner",
+                    "Element is missing from outliner: " + uuid
                 );
             }
         }
     }
 
     private static void validateOutlinerNodes(
-            List<ModelOutlinerNode> nodes,
-            String parentPath,
-            Set<String> knownCubeUuids,
-            Set<String> referencedCubeUuids,
-            Set<String> nodeUuids,
-            List<ValidationIssue> issues
+        List<ModelOutlinerNode> nodes,
+        String parentPath,
+        Set<String> knownElementUuids,
+        Set<String> referencedElementUuids,
+        Set<String> nodeUuids,
+        List<ValidationIssue> issues
     ) {
         for (int i = 0; i < nodes.size(); i++) {
             ModelOutlinerNode node = nodes.get(i);
@@ -391,98 +462,110 @@ public final class BlockbenchModelValidator {
                 continue;
             }
 
-            if (node.uuid() != null && !node.uuid().isBlank()) {
-                if (!nodeUuids.add(node.uuid())) {
+            String nodeUuid = node.uuid();
+
+            if (nodeUuid != null && !nodeUuid.isBlank()) {
+                if (!nodeUuids.add(nodeUuid)) {
                     addError(
-                            issues,
-                            path + ".uuid",
-                            "Duplicate outliner node UUID: " + node.uuid()
+                        issues,
+                        path + ".uuid",
+                        "Duplicate outliner node UUID: " + nodeUuid
                     );
                 }
+            } else {
+                addWarning(
+                    issues,
+                    path + ".uuid",
+                    "Outliner node has no UUID."
+                );
             }
 
             if (node.type() == null) {
-                addError(
-                        issues,
-                        path + ".type",
-                        "Outliner node has no type."
-                );
-            } else if (node.type() == ModelOutlinerNode.Type.CUBE) {
-                String uuid = node.cubeUuid();
+                addError(issues, path + ".type", "Outliner node has no type.");
+            } else if (node.type() == ModelOutlinerNode.Type.ELEMENT) {
+                String uuid = node.elementUuid();
 
                 if (uuid == null || uuid.isBlank()) {
                     addError(
-                            issues,
-                            path + ".uuid",
-                            "Outliner cube node has no cube UUID."
+                        issues,
+                        path + ".elementUuid",
+                        "Outliner element node has no element UUID."
                     );
-                } else if (!knownCubeUuids.contains(uuid)) {
+                } else if (!knownElementUuids.contains(uuid)) {
                     addError(
-                            issues,
-                            path + ".uuid",
-                            "Outliner references unknown cube: " + uuid
+                        issues,
+                        path + ".elementUuid",
+                        "Outliner references unknown element: " + uuid
                     );
-                } else if (!referencedCubeUuids.add(uuid)) {
+                } else if (!referencedElementUuids.add(uuid)) {
                     addError(
-                            issues,
-                            path + ".uuid",
-                            "Cube appears more than once in outliner: " + uuid
+                        issues,
+                        path + ".elementUuid",
+                        "Element appears more than once in outliner: " + uuid
                     );
                 }
             }
-            else {
-                addWarning(
-                        issues,
-                        path + ".uuid",
-                        "Outliner node has no UUID."
+
+            if (node.origin() != null && !isFinite(node.origin())) {
+                addError(
+                    issues,
+                    path + ".origin",
+                    "Outliner node origin contains non-finite coordinates."
+                );
+            }
+
+            if (node.rotation() != null && !isFinite(node.rotation())) {
+                addError(
+                    issues,
+                    path + ".rotation",
+                    "Outliner node rotation contains non-finite values."
                 );
             }
 
             validateOutlinerNodes(
-                    node.children(),
-                    path + ".children",
-                    knownCubeUuids,
-                    referencedCubeUuids,
-                    nodeUuids,
-                    issues
+                node.children(),
+                path + ".children",
+                knownElementUuids,
+                referencedElementUuids,
+                nodeUuids,
+                issues
             );
         }
     }
 
+    // ---------------------------------------------------------------------
+    // Numeric helpers
+    // ---------------------------------------------------------------------
+
     private static boolean isFinite(ModelVector3 vector) {
-        return Float.isFinite(vector.x())
-                && Float.isFinite(vector.y())
-                && Float.isFinite(vector.z());
+        return (
+            Float.isFinite(vector.x()) &&
+            Float.isFinite(vector.y()) &&
+            Float.isFinite(vector.z())
+        );
     }
 
-    private static boolean isFinite(ModelFace.ModelUv uv) {
-        return Float.isFinite(uv.u1())
-                && Float.isFinite(uv.v1())
-                && Float.isFinite(uv.u2())
-                && Float.isFinite(uv.v2());
-    }
+    // ---------------------------------------------------------------------
+    // Issue helpers
+    // ---------------------------------------------------------------------
 
     private static void addError(
-            List<ValidationIssue> issues,
-            String path,
-            String message
+        List<ValidationIssue> issues,
+        String path,
+        String message
     ) {
-        issues.add(new ValidationIssue(
-                ValidationSeverity.ERROR,
-                path,
-                message
-        ));
+        issues.add(
+            new ValidationIssue(ValidationSeverity.ERROR, path, message)
+        );
     }
 
     private static void addWarning(
-            List<ValidationIssue> issues,
-            String path,
-            String message
+        List<ValidationIssue> issues,
+        String path,
+        String message
     ) {
-        issues.add(new ValidationIssue(
-                ValidationSeverity.WARNING,
-                path,
-                message
-        ));
+        issues.add(
+            new ValidationIssue(ValidationSeverity.WARNING, path, message)
+        );
     }
 }

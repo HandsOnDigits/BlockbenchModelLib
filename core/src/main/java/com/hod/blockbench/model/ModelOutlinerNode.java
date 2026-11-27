@@ -1,76 +1,50 @@
-
 package com.hod.blockbench.model;
 
 import java.util.List;
 
+/**
+ * A node in the Blockbench outliner.
+ *
+ * Elements and groups are represented independently.
+ * Groups retain their transforms and hierarchy for animation.
+ */
 public record ModelOutlinerNode(
-        String uuid,
-        String name,
-        Type type,
-        ModelVector3 origin,
-        ModelVector3 rotation,
-        String cubeUuid,
-        List<ModelOutlinerNode> children,
-        String rawJson,
-
-        // Group properties
-        boolean visible,
-        boolean export,
-        boolean locked,
-        int color,
-        boolean isOpen,
-        boolean shade,
-        boolean mirrorUv,
-        int autoUv
+    String uuid,
+    String name,
+    Type type,
+    ModelVector3 origin,
+    ModelVector3 rotation,
+    String elementUuid,
+    List<ModelOutlinerNode> children,
+    String rawJson,
+    boolean visible,
+    boolean export,
+    boolean locked,
+    int color,
+    boolean isOpen,
+    boolean shade,
+    boolean mirrorUv,
+    int autoUv
 ) {
-    public enum Type {
-        GROUP,
-        CUBE,
-        OTHER
-    }
-
     public ModelOutlinerNode {
-        children = List.copyOf(children);
-    }
+        children = children == null ? List.of() : List.copyOf(children);
 
-    /**
-     * Compatibility constructor for nodes without explicit group properties.
-     */
-    public ModelOutlinerNode(
-            String uuid,
-            String name,
-            Type type,
-            ModelVector3 origin,
-            ModelVector3 rotation,
-            String cubeUuid,
-            List<ModelOutlinerNode> children,
-            String rawJson
-    ) {
-        this(
-                uuid,
-                name,
-                type,
-                origin,
-                rotation,
-                cubeUuid,
-                children,
-                rawJson,
-                true,
-                true,
-                false,
-                -1,
-                true,
-                true,
-                false,
-                0
-        );
+        origin = origin != null ? origin : ModelVector3.ZERO;
+        rotation = rotation != null ? rotation : ModelVector3.ZERO;
+        rawJson = rawJson != null ? rawJson : "";
     }
 
     public boolean isGroup() {
         return type == Type.GROUP;
     }
 
-    public boolean isCube() {
-        return type == Type.CUBE;
+    public boolean isElement() {
+        return type == Type.ELEMENT;
+    }
+
+    public enum Type {
+        GROUP,
+        ELEMENT,
+        OTHER,
     }
 }

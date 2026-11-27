@@ -14,11 +14,11 @@ public record ModelGeometryNode(
     String name,
     ModelVector3 origin,
     ModelVector3 rotation,
-    List<ModelQuad> quads,
+    List<ModelTriangle> triangles,
     List<ModelGeometryNode> children
 ) {
     public ModelGeometryNode {
-        quads = List.copyOf(quads);
+        triangles = List.copyOf(triangles);
         children = List.copyOf(children);
     }
 }

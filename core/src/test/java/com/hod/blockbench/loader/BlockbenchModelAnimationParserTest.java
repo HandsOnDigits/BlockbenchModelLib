@@ -172,9 +172,9 @@ class BlockbenchModelAnimationParserTest {
         assertEquals("Spinning Wheel", model.name());
         assertEquals(1, model.animations().size());
 
-        ModelAnimation animation = model.findAnimation(
-            "1ee14373-0d60-6e88-9742-b8a82be67dd1"
-        );
+        ModelAnimation animation = model
+            .findAnimation("1ee14373-0d60-6e88-9742-b8a82be67dd1")
+            .orElseThrow();
 
         assertNotNull(animation);
         assertEquals("Spin", animation.name());

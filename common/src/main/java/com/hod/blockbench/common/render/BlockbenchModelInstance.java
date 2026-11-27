@@ -184,18 +184,16 @@ public final class BlockbenchModelInstance implements AutoCloseable {
     public void playAnimation(String animationUuid) {
         ensureOpen();
 
-        ModelAnimation animation = model.findAnimation(
-            Objects.requireNonNull(
-                animationUuid,
-                "Animation UUID cannot be null."
-            )
+        String uuid = Objects.requireNonNull(
+            animationUuid,
+            "Animation UUID cannot be null."
         );
 
-        if (animation == null) {
-            throw new IllegalArgumentException(
-                "Unknown animation UUID: " + animationUuid
+        ModelAnimation animation = model
+            .findAnimation(uuid)
+            .orElseThrow(() ->
+                new IllegalArgumentException("Unknown animation UUID: " + uuid)
             );
-        }
 
         playAnimation(animation);
     }

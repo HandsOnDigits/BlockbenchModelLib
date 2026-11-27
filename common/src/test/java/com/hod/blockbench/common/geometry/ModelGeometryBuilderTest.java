@@ -1,167 +1,212 @@
-
 package com.hod.blockbench.common.geometry;
-
-import com.hod.blockbench.model.*;
-import com.hod.blockbench.loader.BlockbenchModelLoader;
-
-import org.junit.jupiter.api.Test;
-
-import java.util.List;
-import java.util.Map;
-import java.io.InputStream;
 
 import static org.junit.jupiter.api.Assertions.*;
 
+import com.hod.blockbench.loader.BlockbenchModelLoader;
+import com.hod.blockbench.model.BlockbenchModel;
+import com.hod.blockbench.model.ModelElement;
+import com.hod.blockbench.model.ModelFaceVertex;
+import com.hod.blockbench.model.ModelPolygonFace;
+import com.hod.blockbench.model.ModelTexture;
+import com.hod.blockbench.model.ModelVector3;
+import java.io.InputStream;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import java.util.stream.Collectors;
+import org.junit.jupiter.api.Test;
+
 class ModelGeometryBuilderTest {
-    private static int[] expectedUvIndices(ModelFace.Direction direction) {
-        return switch (direction) {
-            case NORTH, SOUTH, WEST -> new int[]{1, 0, 3, 2};
-            case EAST -> new int[]{0, 1, 2, 3};
-            case UP, DOWN -> new int[]{0, 3, 2, 1};
-        };
+
+    private static ModelTexture testTexture() {
+        return new ModelTexture(
+            "texture-1",
+            "test",
+            16,
+            16,
+            16,
+            16,
+            1,
+            "custom",
+            "",
+            false,
+            "",
+            null
+        );
     }
 
+    private static BlockbenchModel modelWithPolygon(
+        List<ModelVector3> positions,
+        List<ModelFaceVertex> corners
+    ) {
+        Map<String, ModelVector3> vertices = new LinkedHashMap<>();
+
+        for (int i = 0; i < positions.size(); i++) {
+            vertices.put("vertex-" + i, positions.get(i));
+        }
+
+        ModelElement element = new ModelElement(
+            "element-1",
+            "test-element",
+            "mesh",
+            true,
+            ModelVector3.ZERO,
+            ModelVector3.ZERO,
+            vertices,
+            List.of(new ModelPolygonFace("face-1", 0, corners)),
+            ""
+        );
+
+        return new BlockbenchModel(
+            "test",
+            "test",
+            null,
+            List.of(element),
+            List.of(),
+            List.of(testTexture()),
+            List.of(),
+            ""
+        );
+    }
+
+    private static List<ModelFaceVertex> corners(int count) {
+        List<ModelFaceVertex> result = new java.util.ArrayList<>();
+
+        for (int i = 0; i < count; i++) {
+            result.add(new ModelFaceVertex("vertex-" + i, i, i + 1));
+        }
+
+        return List.copyOf(result);
+    }
 
     @Test
-    void textileMachineFacesHaveCorrectWinding() throws Exception {
-        try (InputStream input = getClass().getResourceAsStream(
+    void textileMachineTrianglesHaveCorrectWinding() throws Exception {
+        try (
+            InputStream input = getClass().getResourceAsStream(
                 "/textile_machine.bbmodel"
-        )) {
+            )
+        ) {
             assertNotNull(input);
 
-            var model = BlockbenchModelLoader.load(input);
-            var geometry = ModelGeometryBuilder.build(model);
+            BlockbenchModel model = BlockbenchModelLoader.load(input);
+            ModelGeometry geometry = ModelGeometryBuilder.build(model);
 
-            for (var quad : geometry.quads()) {
-                var v0 = quad.vertices().get(0).position();
-                var v1 = quad.vertices().get(1).position();
-                var v2 = quad.vertices().get(2).position();
+            assertFalse(
+                geometry.triangles().isEmpty(),
+                "The textile machine should produce geometry."
+            );
 
-                var edge1 = v1.subtract(v0);
-                var edge2 = v2.subtract(v0);
+            for (ModelTriangle triangle : geometry.triangles()) {
+                ModelVector3 v0 = triangle.vertices().get(0).position();
+                ModelVector3 v1 = triangle.vertices().get(1).position();
+                ModelVector3 v2 = triangle.vertices().get(2).position();
 
-                float crossX = edge1.y() * edge2.z()
-                        - edge1.z() * edge2.y();
+                ModelVector3 edge1 = v1.subtract(v0);
+                ModelVector3 edge2 = v2.subtract(v0);
 
-                float crossY = edge1.z() * edge2.x()
-                        - edge1.x() * edge2.z();
+                float crossX = edge1.y() * edge2.z() - edge1.z() * edge2.y();
 
-                float crossZ = edge1.x() * edge2.y()
-                        - edge1.y() * edge2.x();
+                float crossY = edge1.z() * edge2.x() - edge1.x() * edge2.z();
 
-                var normal = quad.vertices().get(0).normal();
+                float crossZ = edge1.x() * edge2.y() - edge1.y() * edge2.x();
 
-                float dot = crossX * normal.x()
-                        + crossY * normal.y()
-                        + crossZ * normal.z();
+                ModelVector3 normal = triangle.vertices().get(0).normal();
+
+                float dot =
+                    crossX * normal.x() +
+                    crossY * normal.y() +
+                    crossZ * normal.z();
 
                 assertTrue(
-                        dot > 0.0001f,
-                        "Quad winding does not match its normal: "
-                                + quad.direction()
+                    dot > 0.0001f,
+                    "Triangle winding does not match its normal."
                 );
             }
         }
     }
 
     @Test
-    void mapsUvCoordinatesCorrectlyForAllFaceDirections() {
-        ModelTexture texture = new ModelTexture(
-                "texture-1",
-                "test",
-                16,
-                16,
-                16,
-                16,
-                1,
-                "custom",
-                "",
-                false,
-                "",
-                null
+    void preservesPerCornerUvCoordinates() {
+        List<ModelVector3> positions = List.of(
+            new ModelVector3(0, 0, 0),
+            new ModelVector3(4, 0, 0),
+            new ModelVector3(4, 4, 0),
+            new ModelVector3(0, 4, 0)
         );
 
-        ModelFace.ModelUv uv = new ModelFace.ModelUv(
-                2, 4, 10, 12
+        List<ModelFaceVertex> corners = List.of(
+            new ModelFaceVertex("vertex-0", 2, 4),
+            new ModelFaceVertex("vertex-1", 10, 4),
+            new ModelFaceVertex("vertex-2", 10, 12),
+            new ModelFaceVertex("vertex-3", 2, 12)
         );
 
-        Map<ModelFace.Direction, ModelFace> faces = new java.util.EnumMap<>(
-                ModelFace.Direction.class
+        ModelGeometry geometry = ModelGeometryBuilder.build(
+            modelWithPolygon(positions, corners)
         );
 
-        for (ModelFace.Direction direction : ModelFace.Direction.values()) {
-            faces.put(
-                    direction,
-                    new ModelFace(direction, uv, 0, 0)
+        assertEquals(2, geometry.triangles().size());
+
+        Set<String> actualUvs = geometry
+            .triangles()
+            .stream()
+            .flatMap(triangle -> triangle.vertices().stream())
+            .map(vertex ->
+                String.format(
+                    java.util.Locale.ROOT,
+                    "%.4f,%.4f",
+                    vertex.u(),
+                    vertex.v()
+                )
+            )
+            .collect(Collectors.toSet());
+
+        assertEquals(
+            Set.of(
+                "0.1250,0.2500",
+                "0.6250,0.2500",
+                "0.6250,0.7500",
+                "0.1250,0.7500"
+            ),
+            actualUvs
+        );
+    }
+
+    @Test
+    void triangulatesConcavePolygon() {
+        // A simple concave polygon shaped like an arrow/notched square.
+        List<ModelVector3> positions = List.of(
+            new ModelVector3(0, 0, 0),
+            new ModelVector3(4, 0, 0),
+            new ModelVector3(4, 4, 0),
+            new ModelVector3(2, 2, 0),
+            new ModelVector3(0, 4, 0)
+        );
+
+        ModelGeometry geometry = ModelGeometryBuilder.build(
+            modelWithPolygon(positions, corners(positions.size()))
+        );
+
+        assertEquals(
+            3,
+            geometry.triangles().size(),
+            "A simple five-vertex polygon should produce three triangles."
+        );
+
+        for (ModelTriangle triangle : geometry.triangles()) {
+            ModelVector3 v0 = triangle.vertices().get(0).position();
+            ModelVector3 v1 = triangle.vertices().get(1).position();
+            ModelVector3 v2 = triangle.vertices().get(2).position();
+
+            float crossZ =
+                (v1.x() - v0.x()) * (v2.y() - v0.y()) -
+                (v1.y() - v0.y()) * (v2.x() - v0.x());
+
+            assertTrue(
+                crossZ > 0.0001f,
+                "Concave polygon produced a degenerate or reversed triangle."
             );
-        }
-
-        ModelCube cube = new ModelCube(
-                "cube-1",
-                "test-cube",
-                true,
-                new ModelVector3(1, 2, 3),
-                new ModelVector3(5, 8, 11),
-                ModelVector3.ZERO,
-                ModelVector3.ZERO,
-                0,
-                faces
-        );
-
-        BlockbenchModel model = new BlockbenchModel(
-                "test",
-                "test",
-                null,
-                List.of(cube),
-                List.of(),
-                List.of(texture),
-                ""
-        );
-
-        ModelGeometry geometry = ModelGeometryBuilder.build(model);
-
-        List<ModelUvTransform.UvPoint> uvCorners = List.of(
-                new ModelUvTransform.UvPoint(0.125f, 0.25f),
-                new ModelUvTransform.UvPoint(0.625f, 0.25f),
-                new ModelUvTransform.UvPoint(0.625f, 0.75f),
-                new ModelUvTransform.UvPoint(0.125f, 0.75f)
-        );
-
-        assertEquals(6, geometry.quads().size());
-
-        for (int faceIndex = 0;
-             faceIndex < ModelFace.Direction.values().length;
-             faceIndex++) {
-
-            ModelFace.Direction direction =
-                    ModelFace.Direction.values()[faceIndex];
-
-            ModelQuad quad = geometry.quads().get(faceIndex);
-
-            assertEquals(direction, quad.direction());
-
-            int[] indices = expectedUvIndices(direction);
-
-            for (int vertexIndex = 0; vertexIndex < 4; vertexIndex++) {
-                ModelVertex vertex = quad.vertices().get(vertexIndex);
-
-                ModelUvTransform.UvPoint expected =
-                        uvCorners.get(indices[vertexIndex]);
-
-                assertEquals(
-                        expected.u(),
-                        vertex.u(),
-                        0.0001f,
-                        direction + " vertex " + vertexIndex + " U"
-                );
-
-                assertEquals(
-                        expected.v(),
-                        vertex.v(),
-                        0.0001f,
-                        direction + " vertex " + vertexIndex + " V"
-                );
-            }
         }
     }
 }
