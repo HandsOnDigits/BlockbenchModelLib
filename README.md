@@ -1,21 +1,26 @@
 # BlockbenchModelLib
 
-**A reusable Java library for loading and rendering Blockbench models in Minecraft mods.**
+**A modular Java library for loading, animating, and rendering Blockbench models in Minecraft mods.**
 
-BlockbenchModelLib brings Blockbench's Generic Model (`.bbmodel`) format into Minecraft, providing mod developers with a reusable model-loading, geometry-generation, texture-management, and rendering pipeline.
+BlockbenchModelLib brings Blockbench's Generic Model (`.bbmodel`) format into Minecraft, providing a reusable model-loading, geometry-generation, texture-management, animation, and rendering pipeline.
 
-Instead of implementing custom model parsers and rendering systems for every mod, developers can use BlockbenchModelLib to integrate their Blockbench creations directly into Minecraft.
+The library allows mod developers to use their Blockbench creations directly in Minecraft without having to implement their own model parsers, geometry generators, animation systems, or texture management infrastructure.
+
+> **Unofficial project:** BlockbenchModelLib is an independent, community-developed project. It is not officially made by, affiliated with, endorsed by, or maintained by the Blockbench team. Blockbench and its associated trademarks belong to their respective owners.
 
 ## Features
 
-- **Model Loading** – Load and parse Blockbench `.bbmodel` files.
+- **Model Loading** – Load and parse Blockbench Generic Model (`.bbmodel`) files.
 - **Geometry Generation** – Convert Blockbench model elements into Minecraft-compatible geometry.
 - **Texture Management** – Resolve and register model textures, including embedded texture data.
 - **UV Mapping** – Preserve face-specific UV coordinates and rotations.
-- **Model Hierarchy** – Process model groups and nested structures.
+- **Model Hierarchy** – Preserve model groups, pivots, and nested structures.
 - **Model Bounds** – Inspect generated geometry bounds for accurate positioning and scaling.
-- **Rendering** – Render model instances using Minecraft's rendering infrastructure.
-- **Resource Integration** – Load models through Minecraft's resource manager.
+- **Animation System** – Load and play Blockbench animations with position, rotation, and scale transformations.
+- **Animation Playback** – Control playback, pause, resume, stop, seek, speed, and looping.
+- **Hierarchical Animation** – Apply animated transformations throughout nested model hierarchies.
+- **Rendering** – Render static and animated models using Minecraft's rendering infrastructure.
+- **Resource Integration** – Load models and textures through Minecraft's resource manager.
 
 ## Compatibility
 
@@ -32,11 +37,11 @@ BlockbenchModelLib is divided into three modules:
 
 | Module | Description |
 |---|---|
-| `core` | Minecraft-independent model data structures and parsing. |
-| `common` | Geometry generation, texture management, and rendering. |
+| `core` | Minecraft-independent model data structures, parsing, and animation evaluation. |
+| `common` | Geometry generation, hierarchy, texture management, animation playback, and rendering. |
 | `neoforge` | NeoForge-specific integration. |
 
-This modular architecture separates model processing from Minecraft-specific functionality, making the library easier to maintain and extend.
+This modular architecture separates model processing from Minecraft-specific functionality.
 
 ## Quick Start
 
@@ -45,6 +50,12 @@ The primary runtime API is `BlockbenchModelInstance`.
 ### 1. Load a model
 
 ```java
+ResourceLocation MODEL_LOCATION =
+    ResourceLocation.fromNamespaceAndPath(
+        "mymod",
+        "bbmodels/machine.bbmodel"
+    );
+
 Resource resource = minecraft
     .getResourceManager()
     .getResource(MODEL_LOCATION)
@@ -82,7 +93,7 @@ instance.render(
 );
 ```
 
-### 4. Calculate model positioning
+### 4. Position the model using its bounds
 
 ```java
 ModelBounds bounds = instance
@@ -100,15 +111,54 @@ poseStack.translate(
 );
 ```
 
-The example horizontally centers the model and aligns its lowest geometry point with the origin.
+This horizontally centers the model and aligns its lowest geometry point with the origin.
 
-Remember to close model instances when they are no longer needed.
+## Animation Quick Start
+
+BlockbenchModelLib supports animations defined in Blockbench Generic Model files.
+
+### Play an animation
+
+```java
+instance.playAnimationByName("Spin");
+```
+
+### Update playback
+
+```java
+instance.updateAnimation(deltaSeconds);
+```
+
+Call this once per update tick, using elapsed time in seconds.
+
+### Pause and resume
+
+```java
+instance.pauseAnimation();
+instance.resumeAnimation();
+```
+
+### Stop playback
+
+```java
+instance.stopAnimation();
+```
+
+### Change animation speed
+
+```java
+instance.setAnimationSpeed(2.0F);
+```
+
+The example plays the animation at twice its normal speed.
+
+For more detailed examples, see the Mod Developer Guide.
 
 ## Documentation
 
-- **[Mod Developer Guide](docs/MOD_DEVELOPER_GUIDE.md)** – Installation, model loading, rendering, texture management, positioning, and complete integration examples.
-- **API Reference** – JavaDoc documentation (planned).
-- **Examples** – Additional integration examples (planned).
+- **[Mod Developer Guide](docs/MOD_DEVELOPER_GUIDE.md)** – Installation, model loading, geometry, textures, animation, rendering, positioning, and integration examples.
+- **API Reference** – JavaDoc documentation.
+- **Examples** – Practical Minecraft mod integration examples.
 
 ## Installation
 
@@ -124,9 +174,9 @@ See the [Mod Developer Guide](docs/MOD_DEVELOPER_GUIDE.md) for dependency config
 
 ## Example Projects
 
-The library is developed alongside Minecraft mod integrations, including Havah's Textile.
+BlockbenchModelLib is developed alongside Minecraft mod integrations, including Havah's Textile.
 
-These integrations help demonstrate practical usage of BlockbenchModelLib in real mod development.
+These integrations demonstrate practical usage of the library, including custom item rendering, block entity rendering, model positioning, texture management, and animated models.
 
 ## Contributing
 
@@ -148,12 +198,12 @@ See [LICENSE](LICENSE) for licensing information.
 
 ---
 
-AI is used in some parts of the project development; changes are edited and tested by humans.
+Some parts of the codebase contain AI-generated content that is later edited by humans.
 
-All images and sounds are human-made.
+All images, sounds, and models are made by humans.
 
 ---
 
 **BlockbenchModelLib**
 
-*Making Blockbench models easier to integrate into Minecraft mods.*
+*Bringing Blockbench models, geometry, and animations into Minecraft mods.*
