@@ -36,26 +36,42 @@ public final class ModelTextureResolver {
                 "Texture cannot be null."
             );
 
-            byte[] imageData;
+            byte[] imageData = null;
+            IOException externalFailure = null;
 
             // External Minecraft assets take priority.
             if (texture.hasExternalPath()) {
-                String namespace = texture.namespace();
+                try {
+                    String namespace = texture.namespace();
 
-                if (namespace == null || namespace.isBlank()) {
-                    throw new IOException(
-                        "External texture has no namespace: " + texture.name()
+                    if (namespace == null || namespace.isBlank()) {
+                        throw new IOException(
+                            "External texture has no namespace: " +
+                                texture.name()
+                        );
+                    }
+
+                    String resourcePath = createResourcePath(texture);
+
+                    imageData = externalTextureLoader.load(
+                        namespace,
+                        resourcePath
                     );
+                } catch (IOException exception) {
+                    externalFailure = exception;
+                }
+            }
+
+            // Fall back to embedded image data when external loading fails.
+            if (imageData == null && texture.hasEmbeddedImage()) {
+                imageData = texture.imageData();
+            }
+
+            if (imageData == null) {
+                if (externalFailure != null) {
+                    throw externalFailure;
                 }
 
-                String resourcePath = createResourcePath(texture);
-
-                imageData = externalTextureLoader.load(namespace, resourcePath);
-            } else if (texture.hasEmbeddedImage()) {
-                // Fall back to embedded image data.
-                imageData = texture.imageData();
-            } else {
-                // No embedded data or external path.
                 continue;
             }
 
@@ -92,8 +108,6 @@ public final class ModelTextureResolver {
             }
         }
 
-        // Library convention:
-        // namespace + textures/ + model texture path
         return "textures/" + path;
     }
 }

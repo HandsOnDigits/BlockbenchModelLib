@@ -1,11 +1,15 @@
 package com.hod.blockbench.common.render;
 
+import com.hod.blockbench.animation.AnimationController;
+import com.hod.blockbench.animation.AnimationState;
 import com.hod.blockbench.common.geometry.ModelGeometry;
 import com.hod.blockbench.common.geometry.ModelGeometryBuilder;
+import com.hod.blockbench.common.geometry.ModelGeometryHierarchy;
 import com.hod.blockbench.common.render.texture.MinecraftModelTextureResolver;
 import com.hod.blockbench.common.render.texture.ModelTextureManager;
 import com.hod.blockbench.common.render.texture.ModelTextureRegistration;
 import com.hod.blockbench.model.BlockbenchModel;
+import com.hod.blockbench.model.ModelAnimation;
 import com.mojang.blaze3d.vertex.PoseStack;
 import java.io.IOException;
 import java.util.Objects;
@@ -17,29 +21,35 @@ import net.minecraft.server.packs.resources.ResourceManager;
 /**
  * Runtime instance of a Blockbench model.
  *
- * Owns the generated geometry and registered model textures.
- * Minecraft rendering resources such as PoseStack and MultiBufferSource
+ * Owns generated geometry, registered model textures, and animation playback
+ * state. Minecraft rendering resources such as PoseStack and MultiBufferSource
  * remain owned by the caller.
  *
- * Must be created, rendered, and closed on Minecraft's render thread.
+ * Must be created, rendered, updated, and closed on Minecraft's render thread.
  */
 public final class BlockbenchModelInstance implements AutoCloseable {
 
     private final BlockbenchModel model;
     private final ModelGeometry geometry;
+    private final ModelGeometryHierarchy hierarchy;
     private final ModelTextureRegistration textures;
     private final boolean doubleSided;
+
+    private final AnimationController animationController =
+        new AnimationController();
 
     private boolean closed;
 
     private BlockbenchModelInstance(
         BlockbenchModel model,
         ModelGeometry geometry,
+        ModelGeometryHierarchy hierarchy,
         ModelTextureRegistration textures,
         boolean doubleSided
     ) {
         this.model = Objects.requireNonNull(model);
         this.geometry = Objects.requireNonNull(geometry);
+        this.hierarchy = Objects.requireNonNull(hierarchy);
         this.textures = Objects.requireNonNull(textures);
         this.doubleSided = doubleSided;
     }
@@ -61,6 +71,9 @@ public final class BlockbenchModelInstance implements AutoCloseable {
         );
 
         ModelGeometry geometry = ModelGeometryBuilder.build(model);
+        ModelGeometryHierarchy hierarchy = ModelGeometryBuilder.buildHierarchy(
+            model
+        );
 
         var resolvedTextures = MinecraftModelTextureResolver.resolve(
             model.textures(),
@@ -75,6 +88,7 @@ public final class BlockbenchModelInstance implements AutoCloseable {
             return new BlockbenchModelInstance(
                 model,
                 geometry,
+                hierarchy,
                 textures,
                 doubleSided
             );
@@ -91,12 +105,6 @@ public final class BlockbenchModelInstance implements AutoCloseable {
 
     /**
      * Creates a runtime instance from an already loaded Blockbench model.
-     *
-     * @param model loaded Blockbench model
-     * @param textureManager manager used to register textures
-     * @param resourceManager Minecraft resource manager used to resolve external textures
-     * @return initialized model instance
-     * @throws IOException if a texture cannot be loaded
      */
     public static BlockbenchModelInstance create(
         BlockbenchModel model,
@@ -108,6 +116,9 @@ public final class BlockbenchModelInstance implements AutoCloseable {
 
     /**
      * Renders this model instance.
+     *
+     * Static rendering uses the original flat geometry path.
+     * Playing, paused, and finished animations use hierarchical geometry.
      */
     public void render(
         PoseStack poseStack,
@@ -116,6 +127,29 @@ public final class BlockbenchModelInstance implements AutoCloseable {
         int packedOverlay
     ) {
         ensureOpen();
+
+        AnimationState state = animationController.state();
+
+        if (
+            state.animation() != null &&
+            !state
+                .status()
+                .equals(
+                    com.hod.blockbench.animation.AnimationPlaybackStatus.STOPPED
+                )
+        ) {
+            BlockbenchModelRenderer.render(
+                hierarchy,
+                poseStack,
+                textures,
+                buffers,
+                doubleSided,
+                state.evaluate(),
+                packedLight,
+                packedOverlay
+            );
+            return;
+        }
 
         BlockbenchModelRenderer.render(
             geometry,
@@ -128,6 +162,130 @@ public final class BlockbenchModelInstance implements AutoCloseable {
         );
     }
 
+    // ---------------------------------------------------------------------
+    // Animation playback
+    // ---------------------------------------------------------------------
+
+    /**
+     * Starts playing the supplied animation from its beginning.
+     */
+    public void playAnimation(ModelAnimation animation) {
+        ensureOpen();
+        animationController.play(
+            Objects.requireNonNull(animation, "Animation cannot be null.")
+        );
+    }
+
+    /**
+     * Finds an animation by UUID and starts playing it.
+     *
+     * @throws IllegalArgumentException if no animation with that UUID exists
+     */
+    public void playAnimation(String animationUuid) {
+        ensureOpen();
+
+        ModelAnimation animation = model.findAnimation(
+            Objects.requireNonNull(
+                animationUuid,
+                "Animation UUID cannot be null."
+            )
+        );
+
+        if (animation == null) {
+            throw new IllegalArgumentException(
+                "Unknown animation UUID: " + animationUuid
+            );
+        }
+
+        playAnimation(animation);
+    }
+
+    /**
+     * Finds an animation by name and starts playing it.
+     *
+     * @throws IllegalArgumentException if no animation exists or the name is ambiguous
+     */
+    public void playAnimationByName(String animationName) {
+        ensureOpen();
+
+        var matches = model.findAnimationsByName(
+            Objects.requireNonNull(
+                animationName,
+                "Animation name cannot be null."
+            )
+        );
+
+        if (matches.isEmpty()) {
+            throw new IllegalArgumentException(
+                "Unknown animation name: " + animationName
+            );
+        }
+
+        if (matches.size() > 1) {
+            throw new IllegalArgumentException(
+                "Multiple animations have the name: " +
+                    animationName +
+                    ". Use an animation UUID instead."
+            );
+        }
+
+        playAnimation(matches.get(0));
+    }
+
+    /**
+     * Pauses the current animation.
+     */
+    public void pauseAnimation() {
+        ensureOpen();
+        animationController.pause();
+    }
+
+    /**
+     * Resumes the current animation.
+     */
+    public void resumeAnimation() {
+        ensureOpen();
+        animationController.resume();
+    }
+
+    /**
+     * Stops the current animation and resets its playback time.
+     */
+    public void stopAnimation() {
+        ensureOpen();
+        animationController.stop();
+    }
+
+    /**
+     * Advances animation playback.
+     *
+     * Call once per game tick or render frame, passing elapsed seconds.
+     */
+    public void updateAnimation(float deltaSeconds) {
+        ensureOpen();
+        animationController.update(deltaSeconds);
+    }
+
+    /**
+     * Changes the playback speed.
+     */
+    public void setAnimationSpeed(float speed) {
+        ensureOpen();
+        animationController.setSpeed(speed);
+    }
+
+    /**
+     * Returns the current animation playback state.
+     */
+    public AnimationState animationState() {
+        ensureOpen();
+        return animationController.state();
+    }
+
+    // ---------------------------------------------------------------------
+    // Model information
+    // ---------------------------------------------------------------------
+
     public boolean isDoubleSided() {
         return doubleSided;
     }
@@ -136,8 +294,18 @@ public final class BlockbenchModelInstance implements AutoCloseable {
         return model;
     }
 
+    /**
+     * Returns the original flat geometry representation.
+     */
     public ModelGeometry geometry() {
         return geometry;
+    }
+
+    /**
+     * Returns the hierarchical geometry representation.
+     */
+    public ModelGeometryHierarchy hierarchy() {
+        return hierarchy;
     }
 
     /**

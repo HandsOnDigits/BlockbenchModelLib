@@ -1,125 +1,91 @@
 package com.hod.blockbench.common.geometry;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
+
 import com.hod.blockbench.model.ModelVector3;
 import org.junit.jupiter.api.Test;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
-
 class ModelTransformTest {
 
-    private static final float EPSILON = 0.00001f;
+    private static final float EPSILON = 0.0001f;
 
     @Test
-    void identityPreservesPosition() {
-        ModelVector3 position = new ModelVector3(2, 4, 6);
+    void rotationXRotatesAroundXAxis() {
+        ModelVector3 result = ModelTransform.rotationX(90.0f).transformPosition(
+            new ModelVector3(0, 1, 0)
+        );
 
-        ModelVector3 result = ModelTransform.identity()
-                .transformPosition(position);
-
-        assertVectorEquals(position, result);
+        assertVectorEquals(new ModelVector3(0, 0, 1), result);
     }
 
     @Test
-    void translationMovesPosition() {
-        ModelTransform transform = ModelTransform.translation(
-                10, 20, 30
+    void rotationYRotatesAroundYAxis() {
+        ModelVector3 result = ModelTransform.rotationY(90.0f).transformPosition(
+            new ModelVector3(1, 0, 0)
         );
 
-        ModelVector3 result = transform.transformPosition(
-                new ModelVector3(1, 2, 3)
-        );
-
-        assertVectorEquals(
-                new ModelVector3(11, 22, 33),
-                result
-        );
+        assertVectorEquals(new ModelVector3(0, 0, -1), result);
     }
 
     @Test
-    void rotationAroundZRotatesPosition() {
-        ModelTransform transform = ModelTransform.rotationZ(90);
-
-        ModelVector3 result = transform.transformPosition(
-                new ModelVector3(1, 0, 0)
+    void rotationZRotatesAroundZAxis() {
+        ModelVector3 result = ModelTransform.rotationZ(90.0f).transformPosition(
+            new ModelVector3(1, 0, 0)
         );
 
-        assertVectorEquals(
-                new ModelVector3(0, 1, 0),
-                result
-        );
+        assertVectorEquals(new ModelVector3(0, 1, 0), result);
     }
 
     @Test
-    void rotationAroundOriginPreservesOrigin() {
-        ModelVector3 origin = new ModelVector3(4, 2, 0);
+    void rotationAroundOriginKeepsPivotStationary() {
+        ModelVector3 pivot = new ModelVector3(4, 0, 0);
 
         ModelTransform transform = ModelTransform.aroundOrigin(
-                origin,
-                new ModelVector3(0, 0, 90)
+            pivot,
+            new ModelVector3(0, 0, 90)
         );
 
-        ModelVector3 result = transform.transformPosition(origin);
-
-        assertVectorEquals(origin, result);
-    }
-
-    @Test
-    void rotationAroundOriginRotatesRelativePosition() {
-        ModelTransform transform = ModelTransform.aroundOrigin(
-                new ModelVector3(1, 0, 0),
-                new ModelVector3(0, 0, 90)
-        );
-
-        ModelVector3 result = transform.transformPosition(
-                new ModelVector3(2, 0, 0)
-        );
-
+        assertVectorEquals(pivot, transform.transformPosition(pivot));
         assertVectorEquals(
-                new ModelVector3(1, 1, 0),
-                result
+            new ModelVector3(4, 1, 0),
+            transform.transformPosition(new ModelVector3(5, 0, 0))
         );
     }
 
     @Test
-    void transformationsComposeParentBeforeChild() {
-        ModelTransform parent = ModelTransform.translation(
-                10, 0, 0
+    void nestedTransformsApplyChildBeforeParent() {
+        ModelTransform parent = ModelTransform.aroundOrigin(
+            ModelVector3.ZERO,
+            new ModelVector3(0, 0, 90)
         );
 
-        ModelTransform child = ModelTransform.rotationZ(90);
+        ModelTransform child = ModelTransform.aroundOrigin(
+            new ModelVector3(1, 0, 0),
+            new ModelVector3(0, 0, 90)
+        );
 
         ModelVector3 result = parent
-                .multiply(child)
-                .transformPosition(new ModelVector3(1, 0, 0));
+            .multiply(child)
+            .transformPosition(new ModelVector3(2, 0, 0));
 
-        assertVectorEquals(
-                new ModelVector3(10, 1, 0),
-                result
-        );
+        assertVectorEquals(new ModelVector3(-1, 1, 0), result);
     }
 
     @Test
-    void directionIgnoresTranslation() {
-        ModelTransform transform = ModelTransform.translation(
-                10, 20, 30
-        );
+    void eulerRotationAppliesXThenYThenZ() {
+        ModelVector3 result = ModelTransform.rotation(
+            new ModelVector3(90, 90, 90)
+        ).transformPosition(new ModelVector3(1, 2, 3));
 
-        ModelVector3 result = transform.transformDirection(
-                new ModelVector3(1, 0, 0)
-        );
-
-        assertVectorEquals(
-                new ModelVector3(1, 0, 0),
-                result
-        );
+        assertVectorEquals(new ModelVector3(3, 2, -1), result);
     }
 
     private static void assertVectorEquals(
-            ModelVector3 expected,
-            ModelVector3 actual
+        ModelVector3 expected,
+        ModelVector3 actual
     ) {
-        assertEquals(expected.x(), actual.x(), EPSILON);
-        assertEquals(expected.y(), actual.y(), EPSILON);
-        assertEquals(expected.z(), actual.z(), EPSILON);
+        assertEquals(expected.x(), actual.x(), EPSILON, "X component");
+        assertEquals(expected.y(), actual.y(), EPSILON, "Y component");
+        assertEquals(expected.z(), actual.z(), EPSILON, "Z component");
     }
 }

@@ -1,5 +1,6 @@
 package com.hod.blockbench.common.render;
 
+import com.hod.blockbench.animation.AnimationTransform;
 import com.hod.blockbench.common.geometry.ModelGeometry;
 import com.hod.blockbench.common.geometry.ModelGeometryHierarchy;
 import com.hod.blockbench.common.geometry.ModelGeometryNode;
@@ -276,6 +277,7 @@ public final class BlockbenchModelRenderer {
             geometry,
             poseStack,
             consumerProvider,
+            Map.of(),
             packedLight,
             packedOverlay
         );
@@ -299,6 +301,7 @@ public final class BlockbenchModelRenderer {
             geometry,
             poseStack,
             consumers,
+            Map.of(),
             packedLight,
             packedOverlay
         );
@@ -329,10 +332,10 @@ public final class BlockbenchModelRenderer {
         ModelGeometryHierarchy geometry,
         PoseStack poseStack,
         IntFunction<VertexConsumer> consumers,
+        Map<String, AnimationTransform> animations,
         int packedLight,
         int packedOverlay
     ) {
-        // Geometry outside the outliner hierarchy has no group transform.
         renderQuads(
             geometry.rootQuads(),
             poseStack,
@@ -342,7 +345,14 @@ public final class BlockbenchModelRenderer {
         );
 
         for (ModelGeometryNode root : geometry.roots()) {
-            renderNode(root, poseStack, consumers, packedLight, packedOverlay);
+            renderNode(
+                root,
+                poseStack,
+                consumers,
+                animations,
+                packedLight,
+                packedOverlay
+            );
         }
     }
 
@@ -350,13 +360,14 @@ public final class BlockbenchModelRenderer {
         ModelGeometryNode node,
         PoseStack poseStack,
         IntFunction<VertexConsumer> consumers,
+        Map<String, AnimationTransform> animations,
         int packedLight,
         int packedOverlay
     ) {
         poseStack.pushPose();
 
         try {
-            applyNodeTransform(node, poseStack);
+            applyNodeTransform(node, poseStack, animations.get(node.uuid()));
 
             renderQuads(
                 node.quads(),
@@ -371,6 +382,7 @@ public final class BlockbenchModelRenderer {
                     child,
                     poseStack,
                     consumers,
+                    animations,
                     packedLight,
                     packedOverlay
                 );
@@ -382,27 +394,55 @@ public final class BlockbenchModelRenderer {
 
     private static void applyNodeTransform(
         ModelGeometryNode node,
-        PoseStack poseStack
+        PoseStack poseStack,
+        AnimationTransform animation
     ) {
         ModelVector3 origin =
             node.origin() != null ? node.origin() : ModelVector3.ZERO;
 
-        ModelVector3 rotation =
+        ModelVector3 baseRotation =
             node.rotation() != null ? node.rotation() : ModelVector3.ZERO;
+
+        ModelVector3 position =
+            animation != null ? animation.position() : ModelVector3.ZERO;
+
+        ModelVector3 animatedRotation =
+            animation != null ? animation.rotation() : ModelVector3.ZERO;
+
+        ModelVector3 scale =
+            animation != null
+                ? animation.scale()
+                : new ModelVector3(1.0f, 1.0f, 1.0f);
 
         float units = BLOCKBENCH_UNITS_PER_BLOCK;
 
-        // Move to the Blockbench pivot.
+        // Apply animated translation.
+        poseStack.translate(
+            position.x() / units,
+            position.y() / units,
+            position.z() / units
+        );
+
+        // Move to the group pivot.
         poseStack.translate(
             origin.x() / units,
             origin.y() / units,
             origin.z() / units
         );
 
-        // Match ModelTransform.rotation(): X, then Y, then Z.
-        poseStack.mulPose(Axis.ZP.rotationDegrees(rotation.z()));
-        poseStack.mulPose(Axis.YP.rotationDegrees(rotation.y()));
-        poseStack.mulPose(Axis.XP.rotationDegrees(rotation.x()));
+        // Combine base and animated rotation.
+        poseStack.mulPose(
+            Axis.ZP.rotationDegrees(baseRotation.z() + animatedRotation.z())
+        );
+        poseStack.mulPose(
+            Axis.YP.rotationDegrees(baseRotation.y() + animatedRotation.y())
+        );
+        poseStack.mulPose(
+            Axis.XP.rotationDegrees(baseRotation.x() + animatedRotation.x())
+        );
+
+        // Apply animated scale around the pivot.
+        poseStack.scale(scale.x(), scale.y(), scale.z());
 
         // Move back from the pivot.
         poseStack.translate(
@@ -429,5 +469,93 @@ public final class BlockbenchModelRenderer {
 
             renderQuad(quad, pose, consumer, packedLight, packedOverlay);
         }
+    }
+
+    /**
+     * Renders hierarchical geometry with evaluated animation transforms.
+     *
+     * Animation transforms are matched to geometry nodes by UUID.
+     * Nodes without an animation transform retain their base transforms.
+     */
+    public static void render(
+        ModelGeometryHierarchy geometry,
+        PoseStack poseStack,
+        ModelTextureRegistration textures,
+        MultiBufferSource buffers,
+        boolean doubleSided,
+        Map<String, AnimationTransform> animations,
+        int packedLight,
+        int packedOverlay
+    ) {
+        Objects.requireNonNull(
+            animations,
+            "Animation transforms cannot be null."
+        );
+
+        render(
+            geometry,
+            poseStack,
+            textures,
+            buffers,
+            (index, location) ->
+                doubleSided
+                    ? RenderType.entityCutoutNoCull(location)
+                    : RenderType.entityCutout(location),
+            animations,
+            packedLight,
+            packedOverlay
+        );
+    }
+
+    /**
+     * Renders hierarchical geometry with animated transforms and
+     * a configurable RenderType per texture.
+     */
+    public static void render(
+        ModelGeometryHierarchy geometry,
+        PoseStack poseStack,
+        ModelTextureRegistration textures,
+        MultiBufferSource buffers,
+        BiFunction<Integer, ResourceLocation, RenderType> renderTypes,
+        Map<String, AnimationTransform> animations,
+        int packedLight,
+        int packedOverlay
+    ) {
+        Objects.requireNonNull(geometry, "Geometry cannot be null.");
+        Objects.requireNonNull(poseStack, "PoseStack cannot be null.");
+        Objects.requireNonNull(textures, "Textures cannot be null.");
+        Objects.requireNonNull(buffers, "Buffer source cannot be null.");
+        Objects.requireNonNull(
+            renderTypes,
+            "Render type factory cannot be null."
+        );
+        Objects.requireNonNull(
+            animations,
+            "Animation transforms cannot be null."
+        );
+
+        Map<Integer, VertexConsumer> consumers = new HashMap<>();
+
+        IntFunction<VertexConsumer> consumerProvider = index ->
+            consumers.computeIfAbsent(index, textureIndex -> {
+                ResourceLocation location = textures.require(textureIndex);
+
+                RenderType renderType = Objects.requireNonNull(
+                    renderTypes.apply(textureIndex, location),
+                    "RenderType factory returned null for texture " +
+                        textureIndex
+                );
+
+                return buffers.getBuffer(renderType);
+            });
+
+        renderHierarchy(
+            geometry,
+            poseStack,
+            consumerProvider,
+            animations,
+            packedLight,
+            packedOverlay
+        );
     }
 }

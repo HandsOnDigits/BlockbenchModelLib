@@ -208,4 +208,75 @@ class ModelTextureResolverTest {
             )
         );
     }
+
+    @Test
+    void invalidExternalPathFallsBackToEmbeddedImage() throws Exception {
+        byte[] embeddedData = { 10, 20, 30 };
+
+        ModelTexture texture = new ModelTexture(
+            "texture-1",
+            "spinning_wheel.png",
+            64,
+            64,
+            64,
+            64,
+            1,
+            "loop",
+            "",
+            false,
+            "data:image/png;base64,test",
+            embeddedData,
+            "../textures/block/spinning_wheel.png",
+            "block",
+            "havahstextile",
+            true,
+            true
+        );
+
+        List<ResolvedModelTexture> resolved = ModelTextureResolver.resolve(
+            List.of(texture),
+            (namespace, resourcePath) -> {
+                fail("External loader should not receive an invalid path.");
+                return null;
+            }
+        );
+
+        assertEquals(1, resolved.size());
+        assertArrayEquals(embeddedData, resolved.getFirst().imageData());
+    }
+
+    @Test
+    void missingExternalTextureFallsBackToEmbeddedImage() throws Exception {
+        byte[] embeddedData = { 10, 20, 30 };
+
+        ModelTexture texture = new ModelTexture(
+            "texture-1",
+            "spinning_wheel.png",
+            64,
+            64,
+            64,
+            64,
+            1,
+            "loop",
+            "",
+            false,
+            "data:image/png;base64,test",
+            embeddedData,
+            "block/spinning_wheel.png",
+            "block",
+            "havahstextile",
+            true,
+            true
+        );
+
+        List<ResolvedModelTexture> resolved = ModelTextureResolver.resolve(
+            List.of(texture),
+            (namespace, resourcePath) -> {
+                throw new FileNotFoundException(resourcePath);
+            }
+        );
+
+        assertEquals(1, resolved.size());
+        assertArrayEquals(embeddedData, resolved.getFirst().imageData());
+    }
 }
