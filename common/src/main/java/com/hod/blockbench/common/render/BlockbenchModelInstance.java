@@ -2,6 +2,7 @@ package com.hod.blockbench.common.render;
 
 import com.hod.blockbench.animation.AnimationController;
 import com.hod.blockbench.animation.AnimationState;
+import com.hod.blockbench.animation.AnimationTransform;
 import com.hod.blockbench.common.geometry.ModelGeometry;
 import com.hod.blockbench.common.geometry.ModelGeometryBuilder;
 import com.hod.blockbench.common.geometry.ModelGeometryHierarchy;
@@ -12,6 +13,7 @@ import com.hod.blockbench.model.BlockbenchModel;
 import com.hod.blockbench.model.ModelAnimation;
 import com.mojang.blaze3d.vertex.PoseStack;
 import java.io.IOException;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import net.minecraft.client.renderer.MultiBufferSource;
@@ -130,33 +132,20 @@ public final class BlockbenchModelInstance implements AutoCloseable {
 
         AnimationState state = animationController.state();
 
-        if (
+        Map<String, AnimationTransform> animations =
             state.animation() != null &&
-            !state
-                .status()
-                .equals(
-                    com.hod.blockbench.animation.AnimationPlaybackStatus.STOPPED
-                )
-        ) {
-            BlockbenchModelRenderer.render(
-                hierarchy,
-                poseStack,
-                textures,
-                buffers,
-                doubleSided,
-                state.evaluate(),
-                packedLight,
-                packedOverlay
-            );
-            return;
-        }
+            state.status() !=
+                com.hod.blockbench.animation.AnimationPlaybackStatus.STOPPED
+                ? state.evaluate()
+                : Map.of();
 
         BlockbenchModelRenderer.render(
-            geometry,
+            hierarchy,
             poseStack,
             textures,
             buffers,
             doubleSided,
+            animations,
             packedLight,
             packedOverlay
         );
