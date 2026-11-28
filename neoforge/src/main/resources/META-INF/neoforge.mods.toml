@@ -1,27 +1,28 @@
 
-modLoader="javafml"
-loaderVersion="[4,)"
-license="MIT"
+modLoader = "javafml"
+loaderVersion = "[4,)"
+license = "MIT"
 
 [[mods]]
-modId="blockbenchmodellib"
-version="${file.jarVersion}"
-displayName="BlockbenchModelLib"
-authors="HandsOnDigits"
-description='''
+modId = "blockbenchmodellib"
+version = "${file.jarVersion}"
+displayName = "BlockbenchModelLib"
+logoFile = "icon.png"
+authors = "HandsOnDigits"
+description = '''
 A reusable Blockbench model loading, geometry, texture and rendering library for NeoForge mods.
 '''
 
 [[dependencies.blockbenchmodellib]]
-modId="neoforge"
-type="required"
-versionRange="[21.1,)"
-ordering="NONE"
-side="BOTH"
+modId = "neoforge"
+type = "required"
+versionRange = "[21.1,)"
+ordering = "NONE"
+side = "BOTH"
 
 [[dependencies.blockbenchmodellib]]
-modId="minecraft"
-type="required"
-versionRange="[1.21.1,1.22)"
-ordering="NONE"
-side="BOTH"
+modId = "minecraft"
+type = "required"
+versionRange = "[1.21.1,1.22)"
+ordering = "NONE"
+side = "BOTH"
