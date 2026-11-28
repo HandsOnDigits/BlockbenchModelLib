@@ -8,6 +8,18 @@ The library allows mod developers to use their Blockbench creations directly in 
 
 > **Unofficial project:** BlockbenchModelLib is an independent, community-developed project. It is not officially made by, affiliated with, endorsed by, or maintained by the Blockbench team. Blockbench and its associated trademarks belong to their respective owners.
 
+## Important: Model Rotation
+
+For the best results when using BlockbenchModelLib, **apply all model rotations in Blockbench before exporting your `.bbmodel` file**.
+
+Unapplied rotations can cause unexpected geometry orientation, pivot behavior, and positioning differences when the model is loaded and rendered in Minecraft.
+
+In Blockbench, select the relevant elements and use **Apply Transformations / Apply Rotation** where appropriate before exporting.
+
+This is particularly important for models with rotated cubes, nested groups, and animated parts.
+
+Applying rotations beforehand helps ensure more predictable geometry generation and model positioning. 
+
 ## Features
 
 - **Model Loading** – Load and parse Blockbench Generic Model (`.bbmodel`) files.
